@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+문서 바로가기: [docs/README.md](docs/README.md)
+
 ## Getting Started
 
 First, run the development server:
@@ -52,6 +54,10 @@ cd /Volumes/MartinData/SERVER/mate_admin
 Detailed plan and 운영 기준 are documented in:
 
 `docs/DOCKER_DEV_PLAN.md`
+
+Documentation index:
+
+`docs/README.md`
 
 ## Learn More
 
