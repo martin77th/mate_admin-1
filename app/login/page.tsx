@@ -2,9 +2,11 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/auth';
+import { useI18n } from '@/components/I18nProvider';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -14,15 +16,15 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
-    if (!authName.trim()) { setError('아이디를 입력해주세요.'); return; }
-    if (!authPassword.trim()) { setError('비밀번호를 입력해주세요.'); return; }
+    if (!authName.trim()) { setError(t('login.requiredAuthName')); return; }
+    if (!authPassword.trim()) { setError(t('login.requiredAuthPassword')); return; }
 
     setLoading(true);
     try {
       await login(authName.trim(), authPassword);
       router.replace('/dashboard');
     } catch {
-      setError('아이디 또는 비밀번호가 올바르지 않습니다.');
+      setError(t('login.invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -38,21 +40,21 @@ export default function LoginPage() {
           </div>
           <div>
             <div className="mm-login-logo-text">MeetMate</div>
-            <div className="mm-login-logo-sub">Admin Panel</div>
+            <div className="mm-login-logo-sub">{t('common.adminPanel')}</div>
           </div>
         </div>
 
-        <h2 className="mm-login-title">로그인</h2>
-        <p className="mm-login-subtitle">관리자 계정으로 로그인하세요.</p>
+        <h2 className="mm-login-title">{t('login.title')}</h2>
+        <p className="mm-login-subtitle">{t('login.subtitle')}</p>
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="mm-form-group">
-            <label className="mm-form-label" htmlFor="authName">아이디</label>
+            <label className="mm-form-label" htmlFor="authName">{t('login.authNameLabel')}</label>
             <input
               id="authName"
               type="text"
               className={`mm-form-control${error ? ' is-invalid' : ''}`}
-              placeholder="관리자 아이디"
+              placeholder={t('login.authNamePlaceholder')}
               value={authName}
               onChange={e => setAuthName(e.target.value)}
               autoComplete="username"
@@ -61,13 +63,13 @@ export default function LoginPage() {
           </div>
 
           <div className="mm-form-group">
-            <label className="mm-form-label" htmlFor="authPassword">비밀번호</label>
+            <label className="mm-form-label" htmlFor="authPassword">{t('login.authPasswordLabel')}</label>
             <div className="mm-input-wrap">
               <input
                 id="authPassword"
                 type={showPw ? 'text' : 'password'}
                 className={`mm-form-control${error ? ' is-invalid' : ''}`}
-                placeholder="비밀번호"
+                placeholder={t('login.authPasswordPlaceholder')}
                 value={authPassword}
                 onChange={e => setAuthPassword(e.target.value)}
                 autoComplete="current-password"
@@ -98,11 +100,11 @@ export default function LoginPage() {
             {loading ? (
               <>
                 <span className="spinner-border spinner-border-sm me-2" role="status" />
-                로그인 중...
+                {t('login.submitting')}
               </>
             ) : (
               <>
-                <i className="bi bi-box-arrow-in-right" /> 로그인
+                <i className="bi bi-box-arrow-in-right" /> {t('login.submit')}
               </>
             )}
           </button>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { apiGet } from '@/lib/api';
 import type { ApiListResponse } from '@/lib/api';
 import { formatDateTime, meetingStatusBadge, formatNumber } from '@/lib/utils';
+import { useI18n } from '@/components/I18nProvider';
 
 interface Meeting {
   meeting_id: string;
@@ -28,6 +29,7 @@ interface MeetingsState {
 }
 
 export default function DashboardPage() {
+  const { locale, t } = useI18n();
   const [stats, setStats] = useState<StatState>({
     totalUsers: 0, totalMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
   });
@@ -75,10 +77,10 @@ export default function DashboardPage() {
   }, []);
 
   const STAT_CARDS = [
-    { label: '전체 사용자',  value: stats.totalUsers,    icon: 'bi-people-fill',         variant: 'primary' },
-    { label: '전체 미팅',    value: stats.totalMeetings,  icon: 'bi-camera-video-fill',   variant: 'info' },
-    { label: '진행 중 미팅', value: stats.activeMeetings, icon: 'bi-play-circle-fill',    variant: 'success' },
-    { label: '종료된 미팅',  value: stats.closedMeetings, icon: 'bi-stop-circle-fill',    variant: 'warning' },
+    { label: t('dashboard.totalUsers'), value: stats.totalUsers, icon: 'bi-people-fill', variant: 'primary' },
+    { label: t('dashboard.totalMeetings'), value: stats.totalMeetings, icon: 'bi-camera-video-fill', variant: 'info' },
+    { label: t('dashboard.activeMeetings'), value: stats.activeMeetings, icon: 'bi-play-circle-fill', variant: 'success' },
+    { label: t('dashboard.closedMeetings'), value: stats.closedMeetings, icon: 'bi-stop-circle-fill', variant: 'warning' },
   ];
 
   return (
@@ -86,8 +88,8 @@ export default function DashboardPage() {
       {/* Page Header */}
       <div className="mm-page-header">
         <div>
-          <h2 className="mm-page-title">대시보드</h2>
-          <p className="mm-page-subtitle">MeetMate 서비스 현황을 한눈에 확인하세요.</p>
+          <h2 className="mm-page-title">{t('dashboard.title')}</h2>
+          <p className="mm-page-subtitle">{t('dashboard.subtitle')}</p>
         </div>
       </div>
 
@@ -104,7 +106,7 @@ export default function DashboardPage() {
                 {stats.loading ? (
                   <div className="mm-skeleton" style={{ height: 32, width: 80, borderRadius: 6 }} />
                 ) : (
-                  <p className="mm-stat-value">{formatNumber(card.value)}</p>
+                  <p className="mm-stat-value">{formatNumber(card.value, locale)}</p>
                 )}
               </div>
             </div>
@@ -118,7 +120,7 @@ export default function DashboardPage() {
         <div className="col-12 col-xl-8">
           <div className="mm-table-wrap">
             <div className="mm-card-header">
-              <span className="mm-card-title">최근 미팅</span>
+              <span className="mm-card-title">{t('dashboard.recentMeetings')}</span>
             </div>
             {meetings.loading ? (
               <div style={{ padding: '32px 0', display: 'flex', justifyContent: 'center' }}>
@@ -127,26 +129,30 @@ export default function DashboardPage() {
             ) : meetings.recent.length === 0 ? (
               <div className="mm-empty-state">
                 <i className="bi bi-camera-video-off" />
-                <p>미팅 데이터가 없습니다.</p>
+                <p>{t('dashboard.noMeetingData')}</p>
               </div>
             ) : (
               <table className="mm-table">
                 <thead>
                   <tr>
-                    <th>미팅명</th>
-                    <th>상태</th>
-                    <th>생성일</th>
-                    <th>주최자</th>
+                    <th>{t('dashboard.meetingName')}</th>
+                    <th>{t('dashboard.status')}</th>
+                    <th>{t('dashboard.createdAt')}</th>
+                    <th>{t('dashboard.owner')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {meetings.recent.map(m => {
-                    const badge = meetingStatusBadge(m.status);
+                    const badge = meetingStatusBadge(m.status, {
+                      held: t('status.held'),
+                      closed: t('status.closed'),
+                      created: t('status.created'),
+                    });
                     return (
                       <tr key={m.meeting_id}>
                         <td style={{ fontWeight: 500 }}>{m.meeting_name ?? m.meeting_id}</td>
                         <td><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
-                        <td style={{ color: 'var(--mm-text-secondary)' }}>{formatDateTime(m.created_at)}</td>
+                        <td style={{ color: 'var(--mm-text-secondary)' }}>{formatDateTime(m.created_at, locale)}</td>
                         <td style={{ color: 'var(--mm-text-secondary)' }}>{m.owner_name ?? '-'}</td>
                       </tr>
                     );
@@ -161,10 +167,10 @@ export default function DashboardPage() {
         <div className="col-12 col-xl-4">
           <div className="mm-card" style={{ height: '100%' }}>
             <div className="mm-card-header">
-              <span className="mm-card-title">진행 중인 미팅</span>
+              <span className="mm-card-title">{t('dashboard.activeMeetingList')}</span>
               <span className="mm-badge mm-badge-success">
                 <i className="bi bi-circle-fill" style={{ fontSize: 8 }} />
-                {meetings.loading ? '...' : meetings.active.length}개
+                {meetings.loading ? '...' : meetings.active.length}{t('common.countSuffix')}
               </span>
             </div>
             <div className="mm-card-body" style={{ padding: 0 }}>
@@ -175,7 +181,7 @@ export default function DashboardPage() {
               ) : meetings.active.length === 0 ? (
                 <div className="mm-empty-state">
                   <i className="bi bi-camera-video-off" />
-                  <p>진행 중인 미팅이 없습니다.</p>
+                  <p>{t('dashboard.noActiveMeetings')}</p>
                 </div>
               ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -194,7 +200,7 @@ export default function DashboardPage() {
                           {m.meeting_name ?? m.meeting_id}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>
-                          {m.held_at ? formatDateTime(m.held_at) : formatDateTime(m.created_at)}
+                          {m.held_at ? formatDateTime(m.held_at, locale) : formatDateTime(m.created_at, locale)}
                         </div>
                       </div>
                     </li>

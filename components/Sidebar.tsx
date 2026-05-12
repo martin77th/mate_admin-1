@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useI18n } from '@/components/I18nProvider';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', icon: 'bi-grid-fill',        label: '대시보드' },
-  { href: '/users',     icon: 'bi-people-fill',       label: '사용자 관리' },
-  { href: '/meetings',  icon: 'bi-camera-video-fill', label: '미팅 관리' },
-  { href: '/settings',  icon: 'bi-gear-fill',         label: '설정' },
+  { href: '/dashboard', icon: 'bi-grid-fill', labelKey: 'page.dashboard' },
+  { href: '/users', icon: 'bi-people-fill', labelKey: 'page.users' },
+  { href: '/meetings', icon: 'bi-camera-video-fill', labelKey: 'page.meetings' },
+  { href: '/settings', icon: 'bi-gear-fill', labelKey: 'page.settings' },
 ];
 
 interface SidebarProps {
@@ -15,6 +16,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <aside className={`mm-sidebar${collapsed ? ' collapsed' : ''}`}>
@@ -28,7 +30,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
 
       {/* Nav */}
       <nav className="mm-sidebar-nav">
-        <div className="mm-nav-section-label">메뉴</div>
+        <div className="mm-nav-section-label">{t('common.menu')}</div>
         {NAV_ITEMS.map(item => (
           <Link
             key={item.href}
@@ -36,7 +38,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
             className={`mm-nav-item${pathname.startsWith(item.href) ? ' active' : ''}`}
           >
             <i className={`bi ${item.icon} mm-nav-item-icon`} />
-            <span className="mm-nav-item-label">{item.label}</span>
+            <span className="mm-nav-item-label">{t(item.labelKey)}</span>
           </Link>
         ))}
       </nav>
