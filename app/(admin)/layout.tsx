@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
@@ -8,6 +8,7 @@ import { ToastProvider } from '@/components/Toast';
 import { useI18n } from '@/components/I18nProvider';
 
 const PAGE_TITLE_KEYS: Record<string, string> = {
+  '/users/new': 'page.usersCreate',
   '/dashboard': 'page.dashboard',
   '/users': 'page.users',
   '/meetings': 'page.meetings',
@@ -24,7 +25,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
-  const authenticated = isLoggedIn();
+  const authenticated = useSyncExternalStore(
+    () => () => {},
+    () => isLoggedIn(),
+    () => true
+  );
 
   useEffect(() => {
     if (!authenticated) {
@@ -37,12 +42,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <ToastProvider>
       <div className="mm-layout">
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={collapsed} onToggleSidebar={() => setCollapsed(v => !v)} />
         <main className={`mm-main${collapsed ? ' collapsed' : ''}`}>
-          <Header
-            title={getPageTitle(pathname, t)}
-            onToggleSidebar={() => setCollapsed(v => !v)}
-          />
+          <Header title={getPageTitle(pathname, t)} />
           <div className="mm-content">{children}</div>
         </main>
       </div>

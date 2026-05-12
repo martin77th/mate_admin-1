@@ -16,6 +16,8 @@ interface Meeting {
 
 interface StatState {
   totalUsers: number;
+  onlineUsers: number | null;
+  offlineUsers: number | null;
   totalMeetings: number;
   activeMeetings: number;
   closedMeetings: number;
@@ -31,24 +33,45 @@ interface MeetingsState {
 export default function DashboardPage() {
   const { locale, t } = useI18n();
   const [stats, setStats] = useState<StatState>({
-    totalUsers: 0, totalMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
+    totalUsers: 0, onlineUsers: null, offlineUsers: null, totalMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
   });
   const [meetings, setMeetings] = useState<MeetingsState>({ recent: [], active: [], loading: true });
 
   useEffect(() => {
+    async function fetchTotalCount(path: string): Promise<number> {
+      const res = await apiGet<ApiListResponse<unknown>>(path);
+      return res.result?.total_count ?? 0;
+    }
+
+    async function fetchTotalCountSafe(path: string): Promise<number | null> {
+      try {
+        return await fetchTotalCount(path);
+      } catch {
+        return null;
+      }
+    }
+
     async function fetchStats() {
       try {
-        const [users, total, active, closed] = await Promise.all([
-          apiGet<ApiListResponse<unknown>>('/api/user/v1/users?limit=1'),
-          apiGet<ApiListResponse<unknown>>('/api/meeting/v1/meetings?limit=1'),
-          apiGet<ApiListResponse<unknown>>('/api/meeting/v1/meetings?limit=1&status=held'),
-          apiGet<ApiListResponse<unknown>>('/api/meeting/v1/meetings?limit=1&status=closed'),
+        const [totalUsers, onlineUsers, totalMeetings, activeMeetings, closedMeetings] = await Promise.all([
+          fetchTotalCount('/api/user/v1/users?limit=1'),
+          fetchTotalCountSafe('/api/user/v1/users?limit=1&status=online'),
+          fetchTotalCount('/api/meeting/v1/meetings?limit=1'),
+          fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=held'),
+          fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=closed'),
         ]);
+
+        const offlineUsers = typeof onlineUsers === 'number'
+          ? Math.max(totalUsers - onlineUsers, 0)
+          : null;
+
         setStats({
-          totalUsers:    users.result?.total_count   ?? 0,
-          totalMeetings: total.result?.total_count   ?? 0,
-          activeMeetings: active.result?.total_count ?? 0,
-          closedMeetings: closed.result?.total_count ?? 0,
+          totalUsers,
+          onlineUsers,
+          offlineUsers,
+          totalMeetings,
+          activeMeetings,
+          closedMeetings,
           loading: false,
         });
       } catch {
@@ -78,6 +101,8 @@ export default function DashboardPage() {
 
   const STAT_CARDS = [
     { label: t('dashboard.totalUsers'), value: stats.totalUsers, icon: 'bi-people-fill', variant: 'primary' },
+    { label: t('dashboard.onlineUsers'), value: stats.onlineUsers, icon: 'bi-broadcast-pin', variant: 'success' },
+    { label: t('dashboard.offlineUsers'), value: stats.offlineUsers, icon: 'bi-person-x-fill', variant: 'warning' },
     { label: t('dashboard.totalMeetings'), value: stats.totalMeetings, icon: 'bi-camera-video-fill', variant: 'info' },
     { label: t('dashboard.activeMeetings'), value: stats.activeMeetings, icon: 'bi-play-circle-fill', variant: 'success' },
     { label: t('dashboard.closedMeetings'), value: stats.closedMeetings, icon: 'bi-stop-circle-fill', variant: 'warning' },
@@ -96,7 +121,7 @@ export default function DashboardPage() {
       {/* Stat Cards */}
       <div className="row g-3 mb-4">
         {STAT_CARDS.map(card => (
-          <div key={card.label} className="col-12 col-sm-6 col-xl-3">
+          <div key={card.label} className="col-12 col-sm-6 col-xl-4">
             <div className="mm-stat-card">
               <div className={`mm-stat-icon mm-stat-icon--${card.variant}`}>
                 <i className={`bi ${card.icon}`} />
@@ -106,7 +131,9 @@ export default function DashboardPage() {
                 {stats.loading ? (
                   <div className="mm-skeleton" style={{ height: 32, width: 80, borderRadius: 6 }} />
                 ) : (
-                  <p className="mm-stat-value">{formatNumber(card.value, locale)}</p>
+                  <p className="mm-stat-value">
+                    {typeof card.value === 'number' ? formatNumber(card.value, locale) : '-'}
+                  </p>
                 )}
               </div>
             </div>
@@ -118,12 +145,18 @@ export default function DashboardPage() {
       <div className="row g-3">
         {/* Recent Meetings */}
         <div className="col-12 col-xl-8">
-          <div className="mm-table-wrap">
-            <div className="mm-card-header">
-              <span className="mm-card-title">{t('dashboard.recentMeetings')}</span>
+          <div className="mm-table-wrap mm-dashboard-recent-wrap">
+            <div className="mm-card-header mm-dashboard-recent-header">
+              <div className="mm-dashboard-recent-title-wrap">
+                <span className="mm-card-title">{t('dashboard.recentMeetings')}</span>
+                <span className="mm-badge mm-badge-muted">
+                  <i className="bi bi-collection-play" />
+                  {meetings.loading ? '...' : `${formatNumber(meetings.recent.length, locale)}${t('common.countSuffix')}`}
+                </span>
+              </div>
             </div>
             {meetings.loading ? (
-              <div style={{ padding: '32px 0', display: 'flex', justifyContent: 'center' }}>
+              <div className="mm-dashboard-recent-loading">
                 <div className="spinner-border text-primary" style={{ width: 24, height: 24, borderWidth: 2 }} />
               </div>
             ) : meetings.recent.length === 0 ? (
@@ -132,13 +165,13 @@ export default function DashboardPage() {
                 <p>{t('dashboard.noMeetingData')}</p>
               </div>
             ) : (
-              <table className="mm-table">
+              <table className="mm-table mm-dashboard-table">
                 <thead>
                   <tr>
-                    <th>{t('dashboard.meetingName')}</th>
-                    <th>{t('dashboard.status')}</th>
-                    <th>{t('dashboard.createdAt')}</th>
-                    <th>{t('dashboard.owner')}</th>
+                    <th className="mm-col-meeting-name">{t('dashboard.meetingName')}</th>
+                    <th className="mm-col-status">{t('dashboard.status')}</th>
+                    <th className="mm-col-created">{t('dashboard.createdAt')}</th>
+                    <th className="mm-col-owner">{t('dashboard.owner')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,10 +183,10 @@ export default function DashboardPage() {
                     });
                     return (
                       <tr key={m.meeting_id}>
-                        <td style={{ fontWeight: 500 }}>{m.meeting_name ?? m.meeting_id}</td>
+                        <td className="mm-dashboard-meeting-name">{m.meeting_name ?? m.meeting_id}</td>
                         <td><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
-                        <td style={{ color: 'var(--mm-text-secondary)' }}>{formatDateTime(m.created_at, locale)}</td>
-                        <td style={{ color: 'var(--mm-text-secondary)' }}>{m.owner_name ?? '-'}</td>
+                        <td className="mm-dashboard-muted">{formatDateTime(m.created_at, locale)}</td>
+                        <td className="mm-dashboard-muted">{m.owner_name ?? '-'}</td>
                       </tr>
                     );
                   })}
@@ -194,15 +227,23 @@ export default function DashboardPage() {
                         display: 'flex', alignItems: 'center', gap: 10,
                       }}
                     >
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--mm-success)', flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mm-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {m.meeting_name ?? m.meeting_id}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>
-                          {m.held_at ? formatDateTime(m.held_at, locale) : formatDateTime(m.created_at, locale)}
+                          {m.held_at
+                            ? `${t('dashboard.startedAtLabel')}: ${formatDateTime(m.held_at, locale)}`
+                            : `${t('dashboard.createdAtLabel')}: ${formatDateTime(m.created_at, locale)}`}
                         </div>
                       </div>
+                      <span className="mm-badge mm-badge-success">
+                        {meetingStatusBadge(m.status, {
+                          held: t('status.held'),
+                          closed: t('status.closed'),
+                          created: t('status.created'),
+                        }).label}
+                      </span>
                     </li>
                   ))}
                 </ul>

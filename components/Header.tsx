@@ -9,13 +9,24 @@ import { useTheme } from '@/components/ThemeProvider';
 
 interface HeaderProps {
   title: string;
-  onToggleSidebar: () => void;
 }
 
-export default function Header({ title, onToggleSidebar }: HeaderProps) {
+function formatRole(role: unknown): string {
+  if (!role) return '';
+  if (typeof role === 'string') return role;
+  if (typeof role === 'object' && role !== null) {
+    const roleObj = role as { name?: string; level?: number };
+    if (roleObj.name) return roleObj.name;
+    if (typeof roleObj.level === 'number') return `level:${roleObj.level}`;
+  }
+  return '';
+}
+
+export default function Header({ title }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const user = getStoredUser();
+  const roleText = formatRole(user?.role);
   const { locale, setLocale, t } = useI18n();
   const { theme, setTheme } = useTheme();
 
@@ -40,9 +51,6 @@ export default function Header({ title, onToggleSidebar }: HeaderProps) {
   return (
     <header className="mm-header">
       <div className="mm-header-left">
-        <button className="mm-sidebar-toggle" onClick={onToggleSidebar} title={t('common.sidebarToggle')}>
-          <i className="bi bi-list" />
-        </button>
         <h1 className="mm-header-title">{title}</h1>
       </div>
       <div className="mm-header-right">
@@ -60,8 +68,8 @@ export default function Header({ title, onToggleSidebar }: HeaderProps) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-text-primary)' }}>
                   {user?.user_name ?? user?.auth_name ?? t('common.admin')}
                 </div>
-                {user?.role && (
-                  <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{user.role}</div>
+                {roleText && (
+                  <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{roleText}</div>
                 )}
               </div>
               <div style={{ padding: '4px 12px 6px', borderBottom: '1px solid var(--mm-border)', marginBottom: 4 }}>

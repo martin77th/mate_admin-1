@@ -12,9 +12,10 @@ const NAV_ITEMS = [
 
 interface SidebarProps {
   collapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
-export default function Sidebar({ collapsed }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggleSidebar }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useI18n();
 
@@ -30,7 +31,18 @@ export default function Sidebar({ collapsed }: SidebarProps) {
 
       {/* Nav */}
       <nav className="mm-sidebar-nav">
-        <div className="mm-nav-section-label">{t('common.menu')}</div>
+        <div className="mm-nav-section-head">
+          <div className="mm-nav-section-label">{t('common.menu')}</div>
+          <button
+            type="button"
+            className="mm-nav-section-toggle"
+            onClick={onToggleSidebar}
+            title={collapsed ? t('common.menuExpand') : t('common.menuCollapse')}
+            aria-label={collapsed ? t('common.menuExpand') : t('common.menuCollapse')}
+          >
+            <i className={`bi ${collapsed ? 'bi-chevron-double-right' : 'bi-chevron-double-left'}`} />
+          </button>
+        </div>
         {NAV_ITEMS.map(item => (
           <Link
             key={item.href}
