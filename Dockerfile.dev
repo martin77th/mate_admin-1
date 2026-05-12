@@ -1,0 +1,9 @@
+FROM node:20-alpine
+
+WORKDIR /workspace
+
+# Keep dev image minimal; dependencies are installed on container start
+# so bind-mounted source changes are reflected immediately.
+RUN apk add --no-cache libc6-compat
+
+EXPOSE 3000
