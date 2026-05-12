@@ -3,15 +3,20 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/auth';
 import { useI18n } from '@/components/I18nProvider';
+import type { Locale } from '@/lib/i18n';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  function changeLocale(nextLocale: Locale) {
+    setLocale(nextLocale);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -33,6 +38,28 @@ export default function LoginPage() {
   return (
     <div className="mm-login-page">
       <div className="mm-login-card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>{t('common.language')}</span>
+            <button
+              type="button"
+              className="mm-btn mm-btn-ghost"
+              style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'ko' ? '1px solid var(--mm-primary)' : undefined }}
+              onClick={() => changeLocale('ko')}
+            >
+              KO
+            </button>
+            <button
+              type="button"
+              className="mm-btn mm-btn-ghost"
+              style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'en' ? '1px solid var(--mm-primary)' : undefined }}
+              onClick={() => changeLocale('en')}
+            >
+              EN
+            </button>
+          </div>
+        </div>
+
         {/* Logo */}
         <div className="mm-login-logo">
           <div className="mm-login-logo-icon">
