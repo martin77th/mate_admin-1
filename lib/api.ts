@@ -1,4 +1,19 @@
 import { getConfiguredApiBaseUrl } from './service-config';
+import { getAuthContext } from './auth';
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  responseBody?: unknown;
+
+  constructor(status: number, message: string, code?: string, responseBody?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.responseBody = responseBody;
+  }
+}
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -34,6 +49,11 @@ export async function apiFetch<T = unknown>(
     const token = getToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+
+      const { tenantId } = getAuthContext();
+      if (tenantId && !headers['X-Mate-Tenant-ID']) {
+        headers['X-Mate-Tenant-ID'] = tenantId;
+      }
     }
   }
 
@@ -44,12 +64,30 @@ export async function apiFetch<T = unknown>(
 
   if (res.status === 401) {
     redirectToLogin();
-    throw new Error('Unauthorized');
+    throw new ApiError(401, 'Unauthorized');
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => 'Unknown error');
-    throw new Error(`API Error ${res.status}: ${text}`);
+    let parsed: unknown;
+    let code: string | undefined;
+    let message = `API Error ${res.status}: ${text}`;
+
+    try {
+      parsed = JSON.parse(text);
+      const asObj = parsed as {
+        error?: string;
+        message?: { format?: string };
+      };
+      code = asObj.error;
+      if (asObj.message?.format) {
+        message = asObj.message.format;
+      }
+    } catch {
+      // Keep the fallback raw-text message.
+    }
+
+    throw new ApiError(res.status, message, code, parsed ?? text);
   }
 
   return res.json() as Promise<T>;
