@@ -22,17 +22,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [ready, setReady] = useState(false);
+  const authenticated = isLoggedIn();
 
   useEffect(() => {
-    if (!isLoggedIn()) {
+    if (!authenticated) {
       router.replace('/login');
-    } else {
-      setReady(true);
     }
-  }, [router]);
+  }, [authenticated, router]);
 
-  if (!ready) return null;
+  if (!authenticated) return null;
 
   return (
     <ToastProvider>
