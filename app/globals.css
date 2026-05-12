@@ -218,6 +218,8 @@ a:hover { color: var(--mm-primary-hover); }
 .mm-dashboard-recent-wrap .mm-card-header { border-bottom: 1px solid var(--mm-border); }
 .mm-dashboard-recent-title-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mm-dashboard-recent-loading { padding: 34px 0; display: flex; justify-content: center; }
+.mm-dashboard-recent-wrap { min-height: 100%; }
+.mm-dashboard-recent-wrap .mm-table { margin-top: 12px; }
 .mm-dashboard-table { table-layout: auto; }
 .mm-dashboard-table th.mm-col-meeting-name { min-width: 260px; }
 .mm-dashboard-table th.mm-col-status { width: 120px; }
@@ -231,6 +233,49 @@ a:hover { color: var(--mm-primary-hover); }
   text-overflow: ellipsis;
 }
 .mm-dashboard-muted { color: var(--mm-text-secondary); }
+.mm-dashboard-active-loading { padding: 34px 0; display: flex; justify-content: center; }
+.mm-dashboard-active-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+.mm-dashboard-active-item {
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-md);
+  background: var(--mm-bg-elevated);
+  padding: 11px 12px;
+  transition: border-color var(--mm-transition), transform var(--mm-transition);
+}
+.mm-dashboard-active-item:hover {
+  border-color: rgba(79, 110, 247, 0.35);
+  transform: translateY(-1px);
+}
+.mm-dashboard-active-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mm-dashboard-active-item-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-dashboard-active-item-meta {
+  margin: 6px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--mm-text-muted);
+  line-height: 1.45;
+}
 
 /* ===== Dropdown ===== */
 .mm-dropdown { position: relative; display: inline-block; }
@@ -299,6 +344,7 @@ a:hover { color: var(--mm-primary-hover); }
   .mm-dashboard-table th.mm-col-status,
   .mm-dashboard-table th.mm-col-created,
   .mm-dashboard-table th.mm-col-owner { width: auto; }
+  .mm-dashboard-active-list { padding: 10px; gap: 8px; }
 }
 
 @media (max-width: 520px) {

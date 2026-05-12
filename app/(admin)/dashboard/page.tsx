@@ -82,7 +82,7 @@ export default function DashboardPage() {
     async function fetchMeetings() {
       try {
         const [recent, active] = await Promise.all([
-          apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&order_by=created_at&order=desc'),
+          apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=12&order_by=created_at&order=desc'),
           apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&status=held'),
         ]);
         setMeetings({
@@ -208,7 +208,7 @@ export default function DashboardPage() {
             </div>
             <div className="mm-card-body" style={{ padding: 0 }}>
               {meetings.loading ? (
-                <div style={{ padding: '32px 0', display: 'flex', justifyContent: 'center' }}>
+                <div className="mm-dashboard-active-loading">
                   <div className="spinner-border text-primary" style={{ width: 24, height: 24, borderWidth: 2 }} />
                 </div>
               ) : meetings.active.length === 0 ? (
@@ -217,36 +217,28 @@ export default function DashboardPage() {
                   <p>{t('dashboard.noActiveMeetings')}</p>
                 </div>
               ) : (
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {meetings.active.map((m, i) => (
-                    <li
-                      key={m.meeting_id}
-                      style={{
-                        padding: '12px 20px',
-                        borderBottom: i < meetings.active.length - 1 ? '1px solid var(--mm-border)' : 'none',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mm-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {m.meeting_name ?? m.meeting_id}
+                <div className="mm-dashboard-active-list">
+                  {meetings.active.map(m => {
+                    const badge = meetingStatusBadge(m.status, {
+                      held: t('status.held'),
+                      closed: t('status.closed'),
+                      created: t('status.created'),
+                    });
+
+                    return (
+                      <article key={m.meeting_id} className="mm-dashboard-active-item">
+                        <div className="mm-dashboard-active-item-head">
+                          <h3 className="mm-dashboard-active-item-title">{m.meeting_name ?? m.meeting_id}</h3>
+                          <span className={`mm-badge ${badge.cls}`}>{badge.label}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>
-                          {m.held_at
-                            ? `${t('dashboard.startedAtLabel')}: ${formatDateTime(m.held_at, locale)}`
-                            : `${t('dashboard.createdAtLabel')}: ${formatDateTime(m.created_at, locale)}`}
-                        </div>
-                      </div>
-                      <span className="mm-badge mm-badge-success">
-                        {meetingStatusBadge(m.status, {
-                          held: t('status.held'),
-                          closed: t('status.closed'),
-                          created: t('status.created'),
-                        }).label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                        <p className="mm-dashboard-active-item-meta">
+                          <span>{t('dashboard.createdAtLabel')} : {formatDateTime(m.created_at, locale)}</span>
+                          <span>{t('dashboard.owner')} : {m.owner_name ?? '-'}</span>
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
