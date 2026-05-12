@@ -46,52 +46,47 @@ export default function LoginPage() {
   return (
     <div className="mm-login-page">
       <div className="mm-login-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>{t('common.theme')}</span>
-            <button
-              type="button"
-              className="mm-btn mm-btn-ghost"
-              style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
-              onClick={() => changeTheme('light')}
-            >
-              {t('common.light')}
-            </button>
-            <button
-              type="button"
-              className="mm-btn mm-btn-ghost"
-              style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
-              onClick={() => changeTheme('dark')}
-            >
-              {t('common.dark')}
-            </button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>{t('common.language')}</span>
-            <button
-              type="button"
-              className="mm-btn mm-btn-ghost"
-              style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'ko' ? '1px solid var(--mm-primary)' : undefined }}
-              onClick={() => changeLocale('ko')}
-            >
-              KO
-            </button>
-            <button
-              type="button"
-              className="mm-btn mm-btn-ghost"
-              style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'en' ? '1px solid var(--mm-primary)' : undefined }}
-              onClick={() => changeLocale('en')}
-            >
-              EN
-            </button>
-            <Link
-              href="/login/settings"
-              className="mm-btn mm-btn-ghost"
-              style={{ minWidth: 32, width: 32, height: 28, padding: 0, justifyContent: 'center' }}
-              title={t('login.serviceConfigTitle')}
-            >
-              <i className="bi bi-gear" />
-            </Link>
+        <div className="mm-login-toolbar">
+          <div className="mm-login-toolbar-groups">
+            <div className="mm-login-toolbar-group">
+              <span className="mm-login-toolbar-label">{t('common.theme')}</span>
+              <button
+                type="button"
+                className="mm-btn mm-btn-ghost mm-login-chip"
+                style={{ border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
+                onClick={() => changeTheme('light')}
+              >
+                {t('common.light')}
+              </button>
+              <button
+                type="button"
+                className="mm-btn mm-btn-ghost mm-login-chip"
+                style={{ border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
+                onClick={() => changeTheme('dark')}
+              >
+                {t('common.dark')}
+              </button>
+            </div>
+
+            <div className="mm-login-toolbar-group">
+              <span className="mm-login-toolbar-label">{t('common.language')}</span>
+              <button
+                type="button"
+                className="mm-btn mm-btn-ghost mm-login-chip"
+                style={{ minWidth: 44, border: locale === 'ko' ? '1px solid var(--mm-primary)' : undefined }}
+                onClick={() => changeLocale('ko')}
+              >
+                KO
+              </button>
+              <button
+                type="button"
+                className="mm-btn mm-btn-ghost mm-login-chip"
+                style={{ minWidth: 44, border: locale === 'en' ? '1px solid var(--mm-primary)' : undefined }}
+                onClick={() => changeLocale('en')}
+              >
+                EN
+              </button>
+            </div>
           </div>
         </div>
 
@@ -153,23 +148,31 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            className="mm-btn mm-btn-primary mm-btn-lg"
-            style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-2" role="status" />
-                {t('login.submitting')}
-              </>
-            ) : (
-              <>
-                <i className="bi bi-box-arrow-in-right" /> {t('login.submit')}
-              </>
-            )}
-          </button>
+          <div className="mm-login-actions">
+            <button
+              type="submit"
+              className="mm-btn mm-btn-primary mm-btn-lg mm-login-submit"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" />
+                  {t('login.submitting')}
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-box-arrow-in-right" /> {t('login.submit')}
+                </>
+              )}
+            </button>
+            <Link
+              href="/login/settings"
+              className="mm-login-settings-link"
+              title={t('login.serviceConfigTitle')}
+            >
+              <i className="bi bi-gear" />
+            </Link>
+          </div>
         </form>
       </div>
     </div>
