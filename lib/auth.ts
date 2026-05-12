@@ -14,11 +14,14 @@ export interface AuthUser {
 export interface LoginResponse {
   error: string;
   message: { format: string; params: string[] };
-  result: {
-    access_token: string;
-    refresh_token: string;
+  result?: {
+    access_token?: string;
+    refresh_token?: string;
     user?: AuthUser;
   };
+  access_token?: string;
+  refresh_token?: string;
+  user?: AuthUser;
 }
 
 export function getAccessToken(): string | null {
@@ -60,9 +63,16 @@ export async function login(authName: string, authPassword: string): Promise<Log
     { auth_name: authName, auth_password: authPassword },
     { skipAuth: true }
   );
-  if (res.result?.access_token) {
-    saveTokens(res.result.access_token, res.result.refresh_token, res.result.user);
+
+  const accessToken = res.result?.access_token ?? res.access_token;
+  const refreshToken = res.result?.refresh_token ?? res.refresh_token;
+  const user = res.result?.user ?? res.user;
+  if (!accessToken || !refreshToken) {
+    const message = res.message?.format || res.error || 'Login failed';
+    throw new Error(message);
   }
+
+  saveTokens(accessToken, refreshToken, user);
   return res;
 }
 
