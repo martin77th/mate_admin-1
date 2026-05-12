@@ -4,10 +4,13 @@ import { useRouter } from 'next/navigation';
 import { login } from '@/lib/auth';
 import { useI18n } from '@/components/I18nProvider';
 import type { Locale } from '@/lib/i18n';
+import { useTheme } from '@/components/ThemeProvider';
+import type { Theme } from '@/lib/theme';
 
 export default function LoginPage() {
   const router = useRouter();
   const { locale, setLocale, t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -16,6 +19,10 @@ export default function LoginPage() {
 
   function changeLocale(nextLocale: Locale) {
     setLocale(nextLocale);
+  }
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -38,7 +45,26 @@ export default function LoginPage() {
   return (
     <div className="mm-login-page">
       <div className="mm-login-card">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>{t('common.theme')}</span>
+            <button
+              type="button"
+              className="mm-btn mm-btn-ghost"
+              style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
+              onClick={() => changeTheme('light')}
+            >
+              {t('common.light')}
+            </button>
+            <button
+              type="button"
+              className="mm-btn mm-btn-ghost"
+              style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
+              onClick={() => changeTheme('dark')}
+            >
+              {t('common.dark')}
+            </button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--mm-text-muted)' }}>{t('common.language')}</span>
             <button

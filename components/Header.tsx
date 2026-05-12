@@ -4,6 +4,8 @@ import { logout, getStoredUser } from '@/lib/auth';
 import { getInitials } from '@/lib/utils';
 import type { Locale } from '@/lib/i18n';
 import { useI18n } from '@/components/I18nProvider';
+import type { Theme } from '@/lib/theme';
+import { useTheme } from '@/components/ThemeProvider';
 
 interface HeaderProps {
   title: string;
@@ -15,9 +17,14 @@ export default function Header({ title, onToggleSidebar }: HeaderProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const user = getStoredUser();
   const { locale, setLocale, t } = useI18n();
+  const { theme, setTheme } = useTheme();
 
   function changeLocale(nextLocale: Locale) {
     setLocale(nextLocale);
+  }
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
   }
 
   useEffect(() => {
@@ -73,6 +80,25 @@ export default function Header({ title, onToggleSidebar }: HeaderProps) {
                     onClick={() => changeLocale('en')}
                   >
                     EN
+                  </button>
+                </div>
+              </div>
+              <div style={{ padding: '4px 12px 6px', borderBottom: '1px solid var(--mm-border)', marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{t('common.theme')}</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className="mm-btn mm-btn-ghost"
+                    style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
+                    onClick={() => changeTheme('light')}
+                  >
+                    {t('common.light')}
+                  </button>
+                  <button
+                    className="mm-btn mm-btn-ghost"
+                    style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
+                    onClick={() => changeTheme('dark')}
+                  >
+                    {t('common.dark')}
                   </button>
                 </div>
               </div>
