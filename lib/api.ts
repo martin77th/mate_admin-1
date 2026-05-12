@@ -1,4 +1,4 @@
-const BASE_URL = 'https://mate3.dev.meetmate.co.kr';
+import { getConfiguredApiBaseUrl } from './service-config';
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -23,6 +23,7 @@ export async function apiFetch<T = unknown>(
   options: ApiOptions = {}
 ): Promise<T> {
   const { skipAuth, ...init } = options;
+  const baseUrl = getConfiguredApiBaseUrl();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export async function apiFetch<T = unknown>(
     }
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers,
   });

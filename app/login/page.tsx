@@ -1,5 +1,6 @@
 'use client';
 import { useState, FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/auth';
 import { useI18n } from '@/components/I18nProvider';
@@ -83,6 +84,14 @@ export default function LoginPage() {
             >
               EN
             </button>
+            <Link
+              href="/login/settings"
+              className="mm-btn mm-btn-ghost"
+              style={{ minWidth: 32, width: 32, height: 28, padding: 0, justifyContent: 'center' }}
+              title={t('login.serviceConfigTitle')}
+            >
+              <i className="bi bi-gear" />
+            </Link>
           </div>
         </div>
 
