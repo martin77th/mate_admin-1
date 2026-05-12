@@ -32,6 +32,7 @@ interface MeetingsState {
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
+  const [selectedActiveMeetingId, setSelectedActiveMeetingId] = useState<string | null>(null);
   const [stats, setStats] = useState<StatState>({
     totalUsers: 0, onlineUsers: null, offlineUsers: null, totalMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
   });
@@ -81,10 +82,10 @@ export default function DashboardPage() {
 
     async function fetchMeetings() {
       try {
-        const [recent, active] = await Promise.all([
-          apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=12&order_by=created_at&order=desc'),
-          apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&status=held'),
-        ]);
+          const [recent, active] = await Promise.all([
+            apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&order_by=created_at&order=desc'),
+            apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&status=held'),
+          ]);
         setMeetings({
           recent:  recent.result?.items  ?? [],
           active:  active.result?.items  ?? [],
@@ -226,7 +227,19 @@ export default function DashboardPage() {
                     });
 
                     return (
-                      <article key={m.meeting_id} className="mm-dashboard-active-item">
+                      <article
+                        key={m.meeting_id}
+                        className={`mm-dashboard-active-item${selectedActiveMeetingId === m.meeting_id ? ' is-selected' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedActiveMeetingId(prev => prev === m.meeting_id ? null : m.meeting_id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedActiveMeetingId(prev => prev === m.meeting_id ? null : m.meeting_id);
+                          }
+                        }}
+                      >
                         <div className="mm-dashboard-active-item-head">
                           <h3 className="mm-dashboard-active-item-title">{m.meeting_name ?? m.meeting_id}</h3>
                           <span className={`mm-badge ${badge.cls}`}>{badge.label}</span>
