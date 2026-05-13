@@ -12,6 +12,7 @@ const DESKTOP_MIN_WIDTH = 1200;
 const DESKTOP_AUTO_COLLAPSE_MAX_WIDTH = 1440;
 
 const PAGE_TITLE_KEYS: Record<string, string> = {
+  '/meetings/history': 'page.meetingsHistory',
   '/meetings/new': 'page.meetingsCreate',
   '/users/new': 'page.usersCreate',
   '/users/': 'page.usersEdit',
@@ -22,6 +23,13 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
 };
 
 function getPageTitle(pathname: string, t: (key: string) => string): string {
+  if (pathname.startsWith('/meetings/') && pathname.endsWith('/edit')) {
+    return t('page.meetingsEdit');
+  }
+  if (pathname.startsWith('/meetings/') && !pathname.startsWith('/meetings/history') && !pathname.startsWith('/meetings/new')) {
+    return t('page.meetingsDetail');
+  }
+
   const match = Object.keys(PAGE_TITLE_KEYS).find(k => pathname.startsWith(k));
   return match ? t(PAGE_TITLE_KEYS[match]) : t('page.fallbackTitle');
 }

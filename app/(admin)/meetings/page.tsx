@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet } from '@/lib/api';
 import { formatDateTime, meetingStatusBadge } from '@/lib/utils';
@@ -165,6 +166,7 @@ interface MeetingsPageClientProps {
 }
 
 export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientProps) {
+  const router = useRouter();
   const { locale, t } = useI18n();
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -309,17 +311,30 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
   };
 
   const canEditMeeting = (meeting: MeetingItem): boolean => {
-      if (isHistoryMode) return false;
+    if (isHistoryMode) return false;
     return !!meeting.status && EDITABLE_MEETING_STATUSES.has(meeting.status);
   };
 
+  const canAttendMeeting = (meeting: MeetingItem): boolean => {
+    if (isHistoryMode) return false;
+    return meeting.status === 'booked' || meeting.status === 'held';
+  };
+
+  const onAttendMeeting = () => {
+    addToast('info', t('meetings.attendNotReadyTitle'), t('meetings.attendNotReadyMessage'));
+  };
+
   const onEditMeeting = (meeting: MeetingItem) => {
+    if (!meeting.meeting_id) {
+      addToast('warning', t('meetings.editNotFoundTitle'));
+      return;
+    }
     if (!canEditMeeting(meeting)) {
       addToast('warning', t('meetings.editPolicyTitle'), t('meetings.editPolicyReservedOnly'));
       return;
     }
 
-    addToast('info', t('meetings.editNotReadyTitle'), t('meetings.editNotReadyMessage'));
+    router.push(`/meetings/${encodeURIComponent(meeting.meeting_id)}/edit`);
   };
 
   const submitDelete = async () => {
@@ -448,11 +463,20 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                   const ownerLabel = (meeting.owner_id && ownerNameMap[meeting.owner_id]) || meeting.owner_id || '-';
                   const endDateTime = formatEndDateTime(meeting.start_time, meeting.progress_duration, locale);
                   const canEdit = canEditMeeting(meeting);
+                  const canAttend = canAttendMeeting(meeting);
 
                   return (
                     <tr key={meeting.meeting_id ?? `${meeting.name ?? 'meeting'}-${idx}`}>
                       <td className="mm-col-no" style={{ color: 'var(--mm-text-secondary)' }}>{rowStart + idx + 1}</td>
-                      <td className="mm-col-meeting-name"><span className="mm-cell-ellipsis" style={{ fontWeight: 500 }}>{meeting.name || '-'}</span></td>
+                      <td className="mm-col-meeting-name">
+                        {meeting.meeting_id ? (
+                          <Link href={`/meetings/${encodeURIComponent(meeting.meeting_id)}`} className="mm-cell-ellipsis" style={{ fontWeight: 500, display: 'inline-block', width: '100%' }}>
+                            {meeting.name || '-'}
+                          </Link>
+                        ) : (
+                          <span className="mm-cell-ellipsis" style={{ fontWeight: 500 }}>{meeting.name || '-'}</span>
+                        )}
+                      </td>
                       <td className="mm-col-status"><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
                       <td className="mm-col-owner" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{ownerLabel}</span></td>
                       <td className="mm-col-started-at" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{formatDateTime(meeting.start_time, locale)}</span></td>
@@ -461,6 +485,16 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                       {!isHistoryMode && (
                         <td className="mm-col-actions" style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', gap: 6 }}>
+                            {canAttend && (
+                              <button
+                                type="button"
+                                className="mm-btn mm-btn-secondary mm-btn-sm"
+                                title={t('meetings.actionAttend')}
+                                onClick={onAttendMeeting}
+                              >
+                                {t('meetings.actionAttend')}
+                              </button>
+                            )}
                             {canEdit && (
                               <button
                                 type="button"
