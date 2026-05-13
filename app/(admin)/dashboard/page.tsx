@@ -17,9 +17,11 @@ interface Meeting {
 
 interface StatState {
   totalUsers: number;
-  onlineUsers: number | null;
+  lobbyUsers: number | null;
+  roomUsers: number | null;
   offlineUsers: number | null;
   totalMeetings: number;
+  reservedMeetings: number;
   activeMeetings: number;
   closedMeetings: number;
   loading: boolean;
@@ -102,7 +104,7 @@ export default function DashboardPage() {
   const { locale, t } = useI18n();
   const [selectedActiveMeetingId, setSelectedActiveMeetingId] = useState<string | null>(null);
   const [stats, setStats] = useState<StatState>({
-    totalUsers: 0, onlineUsers: null, offlineUsers: null, totalMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
+    totalUsers: 0, lobbyUsers: null, roomUsers: null, offlineUsers: null, totalMeetings: 0, reservedMeetings: 0, activeMeetings: 0, closedMeetings: 0, loading: true,
   });
   const [meetings, setMeetings] = useState<MeetingsState>({ recent: [], active: [], loading: true });
 
@@ -112,33 +114,28 @@ export default function DashboardPage() {
       return res.result?.total_count ?? 0;
     }
 
-    async function fetchTotalCountSafe(path: string): Promise<number | null> {
-      try {
-        return await fetchTotalCount(path);
-      } catch {
-        return null;
-      }
-    }
-
     async function fetchStats() {
       try {
-        const [totalUsers, onlineUsers, totalMeetings, activeMeetings, closedMeetings] = await Promise.all([
+        const [totalUsers, reservedMeetings, activeMeetings, closedMeetings] = await Promise.all([
           fetchTotalCount('/api/user/v1/users?limit=1'),
-          fetchTotalCountSafe('/api/user/v1/users?limit=1&status=online'),
-          fetchTotalCount('/api/meeting/v1/meetings?limit=1'),
+          fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=booked&status=created'),
           fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=held'),
-          fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=closed'),
+          fetchTotalCount('/api/meeting/v1/meetings?limit=1&status=closed&status=deleted'),
         ]);
+        const totalMeetings = reservedMeetings + activeMeetings + closedMeetings;
+        const lobbyUsers = 0;
+        const roomUsers = 0;
+        const offlineUsers = totalUsers;
 
-        const offlineUsers = typeof onlineUsers === 'number'
-          ? Math.max(totalUsers - onlineUsers, 0)
-          : null;
+        // 로비/룸 지표 API 미지원 상태: 사용자 수를 전부 오프라인으로 집계
 
         setStats({
           totalUsers,
-          onlineUsers,
+          lobbyUsers,
+          roomUsers,
           offlineUsers,
           totalMeetings,
+          reservedMeetings,
           activeMeetings,
           closedMeetings,
           loading: false,
@@ -150,10 +147,27 @@ export default function DashboardPage() {
 
     async function fetchMeetings() {
       try {
-          const [recentRes, activeRes] = await Promise.all([
-              apiGet<unknown>('/svc/meeting/meetings?limit=8&only_enterable=false&status=closed&order_by=creation_time&order=desc'),
-              apiGet<unknown>('/svc/meeting/meetings?limit=8&only_enterable=true&order_by=creation_time&order=desc'),
-          ]);
+        const recentParams = new URLSearchParams({
+          limit: '8',
+          only_enterable: 'false',
+          order_by: 'creation_time',
+          order: 'desc',
+        });
+        recentParams.append('status', 'closed');
+        recentParams.append('status', 'deleted');
+
+        const activeParams = new URLSearchParams({
+          limit: '8',
+          only_enterable: 'false',
+          order_by: 'creation_time',
+          order: 'desc',
+        });
+        activeParams.append('status', 'held');
+
+        const [recentRes, activeRes] = await Promise.all([
+          apiGet<unknown>(`/svc/meeting/meetings?${recentParams.toString()}`),
+          apiGet<unknown>(`/svc/meeting/meetings?${activeParams.toString()}`),
+        ]);
 
         const recentItems = normalizeMeetingList(recentRes);
         const activeItems = normalizeMeetingList(activeRes);
@@ -201,11 +215,16 @@ export default function DashboardPage() {
     fetchMeetings();
   }, []);
 
-  const STAT_CARDS = [
+  const USER_STAT_CARDS = [
     { label: t('dashboard.totalUsers'), value: stats.totalUsers, icon: 'bi-people-fill', variant: 'primary' },
-    { label: t('dashboard.onlineUsers'), value: stats.onlineUsers, icon: 'bi-broadcast-pin', variant: 'success' },
+    { label: t('dashboard.lobbyUsers'), value: stats.lobbyUsers, icon: 'bi-door-open-fill', variant: 'success' },
+    { label: t('dashboard.roomUsers'), value: stats.roomUsers, icon: 'bi-camera-video-fill', variant: 'info' },
     { label: t('dashboard.offlineUsers'), value: stats.offlineUsers, icon: 'bi-person-x-fill', variant: 'warning' },
+  ];
+
+  const MEETING_STAT_CARDS = [
     { label: t('dashboard.totalMeetings'), value: stats.totalMeetings, icon: 'bi-camera-video-fill', variant: 'info' },
+    { label: t('dashboard.reservedMeetings'), value: stats.reservedMeetings, icon: 'bi-calendar2-check-fill', variant: 'info' },
     { label: t('dashboard.activeMeetings'), value: stats.activeMeetings, icon: 'bi-play-circle-fill', variant: 'success' },
     { label: t('dashboard.closedMeetings'), value: stats.closedMeetings, icon: 'bi-stop-circle-fill', variant: 'warning' },
   ];
@@ -220,10 +239,33 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stat Cards */}
+      {/* User Stat Cards */}
       <div className="row g-3 mb-4">
-        {STAT_CARDS.map(card => (
-          <div key={card.label} className="col-12 col-sm-6 col-xl-4">
+        {USER_STAT_CARDS.map(card => (
+          <div key={card.label} className="col-12 col-sm-6 col-xl-3">
+            <div className="mm-stat-card">
+              <div className={`mm-stat-icon mm-stat-icon--${card.variant}`}>
+                <i className={`bi ${card.icon}`} />
+              </div>
+              <div className="mm-stat-info">
+                <p className="mm-stat-label">{card.label}</p>
+                {stats.loading ? (
+                  <div className="mm-skeleton" style={{ height: 32, width: 80, borderRadius: 6 }} />
+                ) : (
+                  <p className="mm-stat-value">
+                    {typeof card.value === 'number' ? formatNumber(card.value, locale) : '-'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Meeting Stat Cards */}
+      <div className="row g-3 mb-4">
+        {MEETING_STAT_CARDS.map(card => (
+          <div key={card.label} className="col-12 col-sm-6 col-xl-3">
             <div className="mm-stat-card">
               <div className={`mm-stat-icon mm-stat-icon--${card.variant}`}>
                 <i className={`bi ${card.icon}`} />
@@ -271,9 +313,9 @@ export default function DashboardPage() {
                 <thead>
                   <tr>
                     <th className="mm-col-meeting-name">{t('dashboard.meetingName')}</th>
-                    <th className="mm-col-status">{t('dashboard.status')}</th>
                     <th className="mm-col-created">{t('dashboard.startedAtLabel')}</th>
                     <th className="mm-col-owner">{t('dashboard.owner')}</th>
+                    <th className="mm-col-status">{t('dashboard.status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,9 +328,9 @@ export default function DashboardPage() {
                     return (
                       <tr key={m.meeting_id}>
                         <td className="mm-dashboard-meeting-name">{m.meeting_name ?? m.meeting_id}</td>
-                        <td><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
                         <td className="mm-dashboard-muted">{formatDateTime(m.held_at, locale)}</td>
                         <td className="mm-dashboard-muted">{m.owner_name ?? '-'}</td>
+                        <td><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
                       </tr>
                     );
                   })}
