@@ -11,6 +11,7 @@ interface Meeting {
   status?: string;
   created_at?: string;
   held_at?: string;
+  owner_id?: string;
   owner_name?: string;
 }
 
@@ -28,6 +29,73 @@ interface MeetingsState {
   recent: Meeting[];
   active: Meeting[];
   loading: boolean;
+}
+
+function pickString(src: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = src[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function normalizeMeetingItem(raw: unknown): Meeting | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const src = raw as Record<string, unknown>;
+  const meetingId = pickString(src, ['meeting_id', 'meetingId', 'uuid', 'id']);
+  if (!meetingId) return null;
+
+  return {
+    meeting_id: meetingId,
+    meeting_name: pickString(src, ['meeting_name', 'meetingName', 'name']),
+    status: pickString(src, ['status']),
+    created_at: pickString(src, ['creation_time', 'creationTime', 'created_at', 'createdAt']),
+    held_at: pickString(src, ['start_time', 'startTime', 'held_at', 'heldAt']),
+    owner_id: pickString(src, ['owner_id', 'ownerId', 'owner_uuid', 'ownerUuid']),
+  };
+}
+
+function normalizeMeetingList(payload: unknown): Meeting[] {
+  if (!payload || typeof payload !== 'object') return [];
+
+  const root = payload as Record<string, unknown>;
+  const resultObj = (root.result && typeof root.result === 'object') ? root.result as Record<string, unknown> : null;
+  const itemsRaw =
+    (resultObj?.items && Array.isArray(resultObj.items) ? resultObj.items : null) ??
+    (root.items && Array.isArray(root.items) ? root.items : []);
+
+  return itemsRaw
+    .map(normalizeMeetingItem)
+    .filter((item): item is Meeting => !!item);
+}
+
+function pickFirstUserAuthName(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+
+  const root = payload as Record<string, unknown>;
+  const resultObj = (root.result && typeof root.result === 'object') ? root.result as Record<string, unknown> : null;
+
+  const candidates: Record<string, unknown>[] = [];
+  if (resultObj) {
+    candidates.push(resultObj);
+    if (Array.isArray(resultObj.items) && resultObj.items[0] && typeof resultObj.items[0] === 'object') {
+      candidates.push(resultObj.items[0] as Record<string, unknown>);
+    }
+  }
+  if (Array.isArray(root.items) && root.items[0] && typeof root.items[0] === 'object') {
+    candidates.push(root.items[0] as Record<string, unknown>);
+  }
+
+  for (const candidate of candidates) {
+    const authName = pickString(candidate, ['auth_name', 'authName', 'username']);
+    if (authName) return authName;
+  }
+
+  return undefined;
 }
 
 export default function DashboardPage() {
@@ -82,13 +150,46 @@ export default function DashboardPage() {
 
     async function fetchMeetings() {
       try {
-          const [recent, active] = await Promise.all([
-            apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&order_by=created_at&order=desc'),
-            apiGet<ApiListResponse<Meeting>>('/api/meeting/v1/meetings?limit=8&status=held'),
+          const [recentRes, activeRes] = await Promise.all([
+              apiGet<unknown>('/svc/meeting/meetings?limit=8&only_enterable=false&status=closed&order_by=creation_time&order=desc'),
+              apiGet<unknown>('/svc/meeting/meetings?limit=8&only_enterable=true&order_by=creation_time&order=desc'),
           ]);
+
+        const recentItems = normalizeMeetingList(recentRes);
+        const activeItems = normalizeMeetingList(activeRes);
+
+        const ownerIds = Array.from(
+          new Set(
+            [...recentItems, ...activeItems]
+              .map(item => item.owner_id?.trim())
+              .filter((ownerId): ownerId is string => !!ownerId)
+          )
+        );
+
+        const ownerMapEntries = await Promise.all(
+          ownerIds.map(async ownerId => {
+            try {
+              const userRes = await apiGet<unknown>(`/svc/user/users?uuid=${encodeURIComponent(ownerId)}&limit=1`);
+              return [ownerId, pickFirstUserAuthName(userRes) ?? ''] as const;
+            } catch {
+              return [ownerId, ''] as const;
+            }
+          })
+        );
+
+        const ownerNameById: Record<string, string> = {};
+        for (const [ownerId, authName] of ownerMapEntries) {
+          ownerNameById[ownerId] = authName;
+        }
+
+        const withOwnerName = (item: Meeting): Meeting => ({
+          ...item,
+          owner_name: (item.owner_id && ownerNameById[item.owner_id]) || item.owner_id || '-',
+        });
+
         setMeetings({
-          recent:  recent.result?.items  ?? [],
-          active:  active.result?.items  ?? [],
+          recent: recentItems.map(withOwnerName),
+          active: activeItems.map(withOwnerName),
           loading: false,
         });
       } catch {
@@ -171,7 +272,7 @@ export default function DashboardPage() {
                   <tr>
                     <th className="mm-col-meeting-name">{t('dashboard.meetingName')}</th>
                     <th className="mm-col-status">{t('dashboard.status')}</th>
-                    <th className="mm-col-created">{t('dashboard.createdAt')}</th>
+                    <th className="mm-col-created">{t('dashboard.startedAtLabel')}</th>
                     <th className="mm-col-owner">{t('dashboard.owner')}</th>
                   </tr>
                 </thead>
@@ -186,7 +287,7 @@ export default function DashboardPage() {
                       <tr key={m.meeting_id}>
                         <td className="mm-dashboard-meeting-name">{m.meeting_name ?? m.meeting_id}</td>
                         <td><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
-                        <td className="mm-dashboard-muted">{formatDateTime(m.created_at, locale)}</td>
+                        <td className="mm-dashboard-muted">{formatDateTime(m.held_at, locale)}</td>
                         <td className="mm-dashboard-muted">{m.owner_name ?? '-'}</td>
                       </tr>
                     );
@@ -245,7 +346,7 @@ export default function DashboardPage() {
                           <span className={`mm-badge ${badge.cls}`}>{badge.label}</span>
                         </div>
                         <p className="mm-dashboard-active-item-meta">
-                          <span>{t('dashboard.createdAtLabel')} : {formatDateTime(m.created_at, locale)}</span>
+                          <span>{t('dashboard.startedAtLabel')} : {formatDateTime(m.held_at, locale)}</span>
                           <span>{t('dashboard.owner')} : {m.owner_name ?? '-'}</span>
                         </p>
                       </article>
