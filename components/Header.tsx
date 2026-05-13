@@ -9,6 +9,7 @@ import { useTheme } from '@/components/ThemeProvider';
 
 interface HeaderProps {
   title: string;
+  onToggleMobileMenu?: () => void;
 }
 
 function formatRole(role: unknown): string {
@@ -22,7 +23,7 @@ function formatRole(role: unknown): string {
   return '';
 }
 
-export default function Header({ title }: HeaderProps) {
+export default function Header({ title, onToggleMobileMenu }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const user = getStoredUser();
@@ -51,6 +52,15 @@ export default function Header({ title }: HeaderProps) {
   return (
     <header className="mm-header">
       <div className="mm-header-left">
+        <button
+          type="button"
+          className="mm-mobile-menu-toggle"
+          onClick={onToggleMobileMenu}
+          aria-label={t('common.menu')}
+          title={t('common.menu')}
+        >
+          <i className="bi bi-list" />
+        </button>
         <h1 className="mm-header-title">{title}</h1>
       </div>
       <div className="mm-header-right">

@@ -4,11 +4,17 @@ import { useRouter, usePathname } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import { ToastProvider } from '@/components/Toast';
 import { useI18n } from '@/components/I18nProvider';
 
+const DESKTOP_MIN_WIDTH = 1200;
+const DESKTOP_AUTO_COLLAPSE_MAX_WIDTH = 1440;
+
 const PAGE_TITLE_KEYS: Record<string, string> = {
+  '/meetings/new': 'page.meetingsCreate',
   '/users/new': 'page.usersCreate',
+  '/users/': 'page.usersEdit',
   '/dashboard': 'page.dashboard',
   '/users': 'page.users',
   '/meetings': 'page.meetings',
@@ -25,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const authenticated = useSyncExternalStore(
     () => () => {},
     () => isLoggedIn(),
@@ -37,15 +44,43 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [authenticated, router]);
 
+  useEffect(() => {
+    const applyAutoCollapse = () => {
+      const width = window.innerWidth;
+      const shouldCollapse = width >= DESKTOP_MIN_WIDTH && width <= DESKTOP_AUTO_COLLAPSE_MAX_WIDTH;
+      setCollapsed(shouldCollapse);
+    };
+
+    applyAutoCollapse();
+    window.addEventListener('resize', applyAutoCollapse);
+    return () => {
+      window.removeEventListener('resize', applyAutoCollapse);
+    };
+  }, []);
+
   if (!authenticated) return null;
 
   return (
     <ToastProvider>
       <div className="mm-layout">
-        <Sidebar collapsed={collapsed} onToggleSidebar={() => setCollapsed(v => !v)} />
+        <Sidebar
+          collapsed={collapsed}
+          onToggleSidebar={() => setCollapsed(v => !v)}
+          mobileOpen={mobileMenuOpen}
+          onNavigate={() => setMobileMenuOpen(false)}
+        />
+        {mobileMenuOpen && (
+          <button
+            type="button"
+            className="mm-sidebar-mobile-backdrop"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label={t('common.menuCollapse')}
+          />
+        )}
         <main className={`mm-main${collapsed ? ' collapsed' : ''}`}>
-          <Header title={getPageTitle(pathname, t)} />
+          <Header title={getPageTitle(pathname, t)} onToggleMobileMenu={() => setMobileMenuOpen(v => !v)} />
           <div className="mm-content">{children}</div>
+          <MobileBottomNav />
         </main>
       </div>
     </ToastProvider>
