@@ -40,9 +40,11 @@ export function formatNumber(n?: number | null, locale: Locale = 'ko'): string {
 /** 미팅 상태 badge 클래스 */
 export function meetingStatusBadge(
   status?: string,
-  labels: Partial<Record<'held' | 'closed' | 'created', string>> = {}
+  labels: Partial<Record<'booked' | 'held' | 'closed' | 'created', string>> = {}
 ): { cls: string; label: string } {
   switch (status) {
+    case 'booked':
+      return { cls: 'mm-badge-info', label: labels.booked ?? '예약' };
     case 'held':
       return { cls: 'mm-badge-success', label: labels.held ?? '진행 중' };
     case 'closed':

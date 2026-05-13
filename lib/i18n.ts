@@ -217,6 +217,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       paginationLast: '마지막',
       statusFilter: {
         all: '전체 상태',
+        booked: '예약',
         drafted: '초안',
         created: '생성됨',
         held: '진행 중',
@@ -268,6 +269,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       },
     },
     status: {
+      booked: '예약',
       held: '진행 중',
       closed: '종료',
       created: '생성됨',
@@ -489,6 +491,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       paginationLast: 'Last',
       statusFilter: {
         all: 'All Statuses',
+        booked: 'Booked',
         drafted: 'Drafted',
         created: 'Created',
         held: 'In Progress',
@@ -540,6 +543,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       },
     },
     status: {
+      booked: 'Booked',
       held: 'In Progress',
       closed: 'Closed',
       created: 'Created',

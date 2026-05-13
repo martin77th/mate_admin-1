@@ -26,9 +26,9 @@ interface MeetingItem {
   created_at?: string;
 }
 
-type MeetingStatusFilter = 'all' | 'drafted' | 'created' | 'held' | 'closed';
+type MeetingStatusFilter = 'all' | 'booked' | 'held';
 
-const EDITABLE_MEETING_STATUSES = new Set(['drafted', 'created']);
+const EDITABLE_MEETING_STATUSES = new Set(['booked']);
 
 function pickString(src: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
@@ -146,11 +146,12 @@ function formatEndDateTime(startTime?: string, keepDurationMs?: number, locale?:
 }
 
 function formatMeetingStatus(status: string | undefined, t: (key: string) => string): { cls: string; label: string } {
-  if (status === 'drafted') {
-    return { cls: 'mm-badge-info', label: t('meetings.statusFilter.drafted') };
+  if (status === 'booked') {
+    return { cls: 'mm-badge-info', label: t('meetings.statusFilter.booked') };
   }
 
   const badge = meetingStatusBadge(status, {
+    booked: t('meetings.statusFilter.booked'),
     held: t('status.held'),
     closed: t('status.closed'),
     created: t('status.created'),
@@ -194,12 +195,14 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
           limit: String(pageSize),
           order_by: 'creation_time',
           order: 'desc',
-          only_enterable: String(onlyEnterable),
         });
 
         if (isHistoryMode) {
           params.append('status', 'closed');
-        } else if (statusFilter !== 'all') {
+        } else if (statusFilter === 'all') {
+          params.append('status', 'booked');
+          params.append('status', 'held');
+        } else {
           params.append('status', statusFilter);
         }
 
@@ -306,7 +309,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
   };
 
   const canEditMeeting = (meeting: MeetingItem): boolean => {
-    if (isHistoryMode) return false;
+      if (isHistoryMode) return false;
     return !!meeting.status && EDITABLE_MEETING_STATUSES.has(meeting.status);
   };
 
@@ -366,10 +369,8 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
               disabled={isHistoryMode}
             >
               <option value="all">{t('meetings.statusFilter.all')}</option>
-              <option value="drafted">{t('meetings.statusFilter.drafted')}</option>
-              <option value="created">{t('meetings.statusFilter.created')}</option>
+              <option value="booked">{t('meetings.statusFilter.booked')}</option>
               <option value="held">{t('meetings.statusFilter.held')}</option>
-              <option value="closed">{t('meetings.statusFilter.closed')}</option>
             </select>
 
             <div className="mm-search-wrap mm-search-tools-input-wrap">
@@ -460,15 +461,16 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                       {!isHistoryMode && (
                         <td className="mm-col-actions" style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', gap: 6 }}>
-                            <button
-                              type="button"
-                              className="mm-btn mm-btn-primary mm-btn-sm"
-                              title={canEdit ? t('meetings.actionEdit') : t('meetings.editPolicyReservedOnly')}
-                              onClick={() => onEditMeeting(meeting)}
-                              disabled={!canEdit}
-                            >
-                              {t('meetings.actionEdit')}
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="mm-btn mm-btn-primary mm-btn-sm"
+                                title={t('meetings.actionEdit')}
+                                onClick={() => onEditMeeting(meeting)}
+                              >
+                                {t('meetings.actionEdit')}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="mm-btn mm-btn-danger mm-btn-sm"

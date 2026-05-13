@@ -517,13 +517,15 @@ Toast.show('저장 중입니다...', 'info');
 
 - 좌측 메뉴는 `현재 진행 미팅`(`/meetings`)과 `지난 미팅 이력`(`/meetings/history`)으로 구분합니다.
 - 현재 진행 미팅 목록은 `only_enterable=true`, 지난 미팅 이력은 `only_enterable=false`로 조회합니다.
+- 현재 진행 미팅 목록은 `status=booked,held`를 사용해 예약/진행중 상태만 조회합니다.
 - 지난 미팅 이력은 `status=closed`를 강제해 진행 중 회의가 섞이지 않도록 합니다.
 - 미팅 목록/검색 조회는 `/svc/meeting/meetings` 엔드포인트를 사용합니다.
 - 현재 진행 미팅의 검색도구 헤더에는 `미팅 생성` 버튼을 제공하며, `/meetings/new` 생성 페이지로 이동합니다.
 - 미팅 생성은 `POST /api/meeting/v1/meetings`로 처리하고 성공 시 현재 진행 미팅 목록으로 복귀합니다.
 - 응답은 root/result 스키마 차이를 정규화해 동일한 테이블 스키마로 렌더링합니다.
 - 종료시간 컬럼은 `start_time + progress_duration` 계산값으로 표시합니다.
-- 현재 진행 미팅의 `수정`은 예약 상태(`drafted`, `created`)에서만 허용하며, 진행 중(`held`)은 수정할 수 없습니다.
+- 현재 진행 미팅의 `수정`은 예약 상태(`booked`)에서만 허용합니다.
+- `booked`가 아닌 상태에서는 `수정` 버튼을 노출하지 않습니다.
 - 지난 미팅 이력에서는 `수정/삭제` 액션을 제공하지 않습니다.
 - 목록 우측 `관리` 컬럼의 `수정/삭제` 액션은 현재 진행 미팅에서만 제공합니다.
 - 삭제는 확인 모달을 거쳐 `DELETE /api/meeting/v1/meetings/{meeting_id}` 호출 후 목록을 갱신합니다.
