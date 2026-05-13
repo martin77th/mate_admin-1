@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet } from '@/lib/api';
-import { formatDateTime, meetingStatusBadge } from '@/lib/utils';
+import { formatDateTime, formatNumber, meetingStatusBadge } from '@/lib/utils';
 import { useI18n } from '@/components/I18nProvider';
 import { ConfirmModal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
@@ -500,7 +500,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
 
       <div className="mm-table-wrap">
         <div className="mm-card-header">
-          <span className="mm-card-title">{t('meetings.listTitle')} ({t('meetings.totalCount')}: {totalCount})</span>
+          <span className="mm-card-title">{t('meetings.listTitle')} ({t('meetings.totalCount')}: {formatNumber(totalCount, locale)})</span>
           <select
             className="mm-form-control"
             style={{ width: 150, minWidth: 150 }}

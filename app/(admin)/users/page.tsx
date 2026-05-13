@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet } from '@/lib/api';
 import type { ApiListResponse } from '@/lib/api';
+import { formatNumber } from '@/lib/utils';
 import { useI18n } from '@/components/I18nProvider';
 import { ConfirmModal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
@@ -317,7 +318,7 @@ export default function UsersPage() {
 
       <div className="mm-table-wrap">
         <div className="mm-card-header">
-          <span className="mm-card-title">{t('users.listTitle')} ({t('users.totalCount')}: {totalCount})</span>
+          <span className="mm-card-title">{t('users.listTitle')} ({t('users.totalCount')}: {formatNumber(totalCount, locale)})</span>
           <select
             className="mm-form-control"
             style={{ width: 150, minWidth: 150 }}
