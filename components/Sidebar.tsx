@@ -29,7 +29,10 @@ export default function Sidebar({ collapsed, onToggleSidebar, mobileOpen = false
   const { t } = useI18n();
 
   const isNavItemActive = (href: string) => {
-    if (href === '/meetings') return pathname === '/meetings' || pathname.startsWith('/meetings/');
+    if (href === '/meetings') {
+      // /meetings/history 등 다른 서브 경로는 제외
+      return pathname === '/meetings' || (pathname.startsWith('/meetings/') && !pathname.startsWith('/meetings/history'));
+    }
     if (href === '/meetings/history') return pathname.startsWith('/meetings/history');
     return pathname.startsWith(href);
   };

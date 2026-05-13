@@ -40,7 +40,7 @@ export function formatNumber(n?: number | null, locale: Locale = 'ko'): string {
 /** 미팅 상태 badge 클래스 */
 export function meetingStatusBadge(
   status?: string,
-  labels: Partial<Record<'booked' | 'held' | 'closed' | 'created', string>> = {}
+  labels: Partial<Record<'booked' | 'held' | 'closed' | 'created' | 'deleted', string>> = {}
 ): { cls: string; label: string } {
   switch (status) {
     case 'booked':
@@ -51,6 +51,8 @@ export function meetingStatusBadge(
       return { cls: 'mm-badge-muted', label: labels.closed ?? '종료' };
     case 'created':
       return { cls: 'mm-badge-info', label: labels.created ?? '생성됨' };
+    case 'deleted':
+      return { cls: 'mm-badge-danger', label: labels.deleted ?? '삭제' };
     default:        return { cls: 'mm-badge-muted',   label: status ?? '-' };
   }
 }

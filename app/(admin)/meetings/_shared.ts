@@ -90,7 +90,7 @@ function normalizeMeetingListResponse(payload: unknown): MeetingItem[] {
 
 function pickMeetingFromResponse(payload: unknown, meetingId: string): MeetingItem | null {
 	const items = normalizeMeetingListResponse(payload);
-	return items.find(item => item.meeting_id === meetingId) ?? items[0] ?? null;
+	return items.find(item => item.meeting_id === meetingId) ?? null;
 }
 
 export async function fetchMeetingById(meetingId: string): Promise<MeetingItem | null> {
@@ -116,7 +116,7 @@ export async function fetchMeetingById(meetingId: string): Promise<MeetingItem |
 
 	try {
 		const svcRes = await apiGet<unknown>(
-			`/svc/meeting/meetings?limit=20&status=booked&status=held&status=closed&search_keyword=${encodedId}&order_by=creation_time&order=desc`
+			`/svc/meeting/meetings?limit=20&status=created&status=booked&search_keyword=${encodedId}&order_by=creation_time&order=desc`
 		);
 		const picked = pickMeetingFromResponse(svcRes, meetingId);
 		if (picked) return picked;
@@ -126,7 +126,7 @@ export async function fetchMeetingById(meetingId: string): Promise<MeetingItem |
 
 	try {
 		const apiRes = await apiGet<unknown>(
-			`/api/meeting/v1/meetings?limit=20&status=booked&status=held&status=closed&search_keyword=${encodedId}&order_by=creation_time&order=desc`
+			`/api/meeting/v1/meetings?limit=20&status=created&status=booked&search_keyword=${encodedId}&order_by=creation_time&order=desc`
 		);
 		return pickMeetingFromResponse(apiRes, meetingId);
 	} catch {

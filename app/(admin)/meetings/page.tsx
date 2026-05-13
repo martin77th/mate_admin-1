@@ -27,9 +27,9 @@ interface MeetingItem {
   created_at?: string;
 }
 
-type MeetingStatusFilter = 'all' | 'booked' | 'held';
+type MeetingStatusFilter = 'all' | 'booked' | 'held' | 'closed' | 'deleted';
 
-const EDITABLE_MEETING_STATUSES = new Set(['booked']);
+const EDITABLE_MEETING_STATUSES = new Set(['booked', 'created']);
 
 function pickString(src: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
@@ -137,6 +137,26 @@ function pickFirstUserAuthName(payload: unknown): string | undefined {
   return undefined;
 }
 
+function normalizeMemberStatusFromRaw(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return '';
+
+  const src = raw as Record<string, unknown>;
+  const profile = src.profile && typeof src.profile === 'object' ? src.profile as Record<string, unknown> : null;
+  const userObj = src.user && typeof src.user === 'object' ? src.user as Record<string, unknown> : null;
+
+  const candidate =
+    pickString(src, ['status', 'stats']) ||
+    (profile ? pickString(profile, ['status', 'stats']) : undefined) ||
+    (userObj ? pickString(userObj, ['status', 'stats']) : undefined) ||
+    '';
+
+  return candidate.trim().toLowerCase();
+}
+
+function isVisibleMemberRaw(raw: unknown): boolean {
+  return normalizeMemberStatusFromRaw(raw) !== 'banned';
+}
+
 function formatEndDateTime(startTime?: string, keepDurationMs?: number, locale?: Locale): string {
   if (!startTime || typeof keepDurationMs !== 'number' || !Number.isFinite(keepDurationMs)) return '-';
   const startTimestamp = Date.parse(startTime);
@@ -156,9 +176,14 @@ function formatMeetingStatus(status: string | undefined, t: (key: string) => str
     held: t('status.held'),
     closed: t('status.closed'),
     created: t('status.created'),
+    deleted: t('status.deleted'),
   });
 
   return badge;
+}
+
+function normalizeMeetingStatus(status?: string): string {
+  return (status ?? '').trim().toLowerCase();
 }
 
 interface MeetingsPageClientProps {
@@ -181,6 +206,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
   const [reloadTick, setReloadTick] = useState(0);
   const [deletingMeeting, setDeletingMeeting] = useState<MeetingItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [memberCountMap, setMemberCountMap] = useState<Record<string, number | null>>({});
 
   const isHistoryMode = !onlyEnterable;
 
@@ -200,7 +226,12 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
         });
 
         if (isHistoryMode) {
-          params.append('status', 'closed');
+          if (statusFilter === 'all') {
+            params.append('status', 'closed');
+            params.append('status', 'deleted');
+          } else {
+            params.append('status', statusFilter);
+          }
         } else if (statusFilter === 'all') {
           params.append('status', 'booked');
           params.append('status', 'held');
@@ -219,6 +250,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
         const normalized = normalizeMeetingListResponse(res);
         setMeetings(normalized.items);
         setTotalCount(normalized.totalCount);
+        setMemberCountMap({});
       } catch {
         if (cancelled) return;
         setMeetings([]);
@@ -234,6 +266,40 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
       cancelled = true;
     };
   }, [currentPage, pageSize, query, statusFilter, reloadTick, onlyEnterable, isHistoryMode]);
+
+  // 목록 변경 시 각 미팅의 참석자 수 비동기 조회
+  useEffect(() => {
+    if (meetings.length === 0) return;
+    let cancelled = false;
+
+    async function fetchMemberCounts() {
+      await Promise.all(
+        meetings
+          .filter(m => !!m.meeting_id)
+          .map(async m => {
+            const id = m.meeting_id!;
+            try {
+              const res = await apiGet<unknown>(
+                `/api/meeting/v1/members?meeting_id=${encodeURIComponent(id)}&limit=300&status=vacated`
+              );
+              if (cancelled) return;
+              const root = res as Record<string, unknown>;
+              const result = root.result && typeof root.result === 'object'
+                ? root.result as Record<string, unknown>
+                : null;
+              const items = result?.items && Array.isArray(result.items) ? result.items : [];
+              const count = items.filter(isVisibleMemberRaw).length;
+              setMemberCountMap(prev => ({ ...prev, [id]: count }));
+            } catch {
+              if (!cancelled) setMemberCountMap(prev => ({ ...prev, [id]: null }));
+            }
+          })
+      );
+    }
+
+    void fetchMemberCounts();
+    return () => { cancelled = true; };
+  }, [meetings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -312,7 +378,18 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
 
   const canEditMeeting = (meeting: MeetingItem): boolean => {
     if (isHistoryMode) return false;
-    return !!meeting.status && EDITABLE_MEETING_STATUSES.has(meeting.status);
+    const normalizedStatus = normalizeMeetingStatus(meeting.status);
+    if (!normalizedStatus || !EDITABLE_MEETING_STATUSES.has(normalizedStatus)) return false;
+
+    // 사전 입장 가능 시간이 이미 시작됐으면 수정 불가
+    if (meeting.start_time) {
+      const startTs = Date.parse(meeting.start_time);
+      const preEntering = meeting.pre_entering_duration ?? 300000; // 기본 5분
+      const now = new Date().getTime();
+      if (Number.isFinite(startTs) && now >= startTs - preEntering) return false;
+    }
+
+    return true;
   };
 
   const canAttendMeeting = (meeting: MeetingItem): boolean => {
@@ -381,11 +458,20 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                 setCurrentPage(1);
                 setStatusFilter(e.target.value as MeetingStatusFilter);
               }}
-              disabled={isHistoryMode}
             >
               <option value="all">{t('meetings.statusFilter.all')}</option>
-              <option value="booked">{t('meetings.statusFilter.booked')}</option>
-              <option value="held">{t('meetings.statusFilter.held')}</option>
+              {!isHistoryMode && (
+                <>
+                  <option value="booked">{t('meetings.statusFilter.booked')}</option>
+                  <option value="held">{t('meetings.statusFilter.held')}</option>
+                </>
+              )}
+              {isHistoryMode && (
+                <>
+                  <option value="closed">{t('meetings.statusFilter.closed')}</option>
+                  <option value="deleted">{t('meetings.statusFilter.deleted')}</option>
+                </>
+              )}
             </select>
 
             <div className="mm-search-wrap mm-search-tools-input-wrap">
@@ -466,24 +552,35 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                   const canAttend = canAttendMeeting(meeting);
 
                   return (
-                    <tr key={meeting.meeting_id ?? `${meeting.name ?? 'meeting'}-${idx}`}>
+                    <tr
+                      key={meeting.meeting_id ?? `${meeting.name ?? 'meeting'}-${idx}`}
+                      style={{ cursor: meeting.meeting_id ? 'pointer' : undefined }}
+                      onClick={() => {
+                        if (meeting.meeting_id) router.push(`/meetings/${encodeURIComponent(meeting.meeting_id)}`);
+                      }}
+                    >
                       <td className="mm-col-no" style={{ color: 'var(--mm-text-secondary)' }}>{rowStart + idx + 1}</td>
                       <td className="mm-col-meeting-name">
-                        {meeting.meeting_id ? (
-                          <Link href={`/meetings/${encodeURIComponent(meeting.meeting_id)}`} className="mm-cell-ellipsis" style={{ fontWeight: 500, display: 'inline-block', width: '100%' }}>
-                            {meeting.name || '-'}
-                          </Link>
-                        ) : (
-                          <span className="mm-cell-ellipsis" style={{ fontWeight: 500 }}>{meeting.name || '-'}</span>
-                        )}
+                        <span className="mm-cell-ellipsis" style={{ fontWeight: 500, display: 'inline-block', width: '100%' }}>
+                          {meeting.name || '-'}
+                        </span>
                       </td>
                       <td className="mm-col-status"><span className={`mm-badge ${badge.cls}`}>{badge.label}</span></td>
                       <td className="mm-col-owner" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{ownerLabel}</span></td>
                       <td className="mm-col-started-at" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{formatDateTime(meeting.start_time, locale)}</span></td>
                       <td className="mm-col-ended-at" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{endDateTime}</span></td>
-                      <td className="mm-col-member-max" style={{ color: 'var(--mm-text-secondary)' }}><span className="mm-cell-ellipsis">{meeting.member_max == null ? '-' : meeting.member_max}</span></td>
+                      <td className="mm-col-member-max" style={{ color: 'var(--mm-text-secondary)' }}>
+                        <span className="mm-cell-ellipsis">
+                          {(() => {
+                            const invited = meeting.member_max == null || meeting.member_max === 0 ? '∞' : meeting.member_max;
+                            const current = meeting.meeting_id ? memberCountMap[meeting.meeting_id] : undefined;
+                            const currentLabel = current == null ? '-' : current;
+                            return `${currentLabel} / ${invited}`;
+                          })()}
+                        </span>
+                      </td>
                       {!isHistoryMode && (
-                        <td className="mm-col-actions" style={{ textAlign: 'center' }}>
+                        <td className="mm-col-actions" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'inline-flex', gap: 6 }}>
                             {canAttend && (
                               <button

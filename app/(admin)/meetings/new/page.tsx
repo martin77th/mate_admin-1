@@ -11,15 +11,25 @@ interface CreateMeetingRequest {
   name: string;
   start_time: string;
   progress_duration: number;
+  pre_entering_duration: number;
   member_max: number;
   entry_option: 'unlimited' | 'registered';
   password?: string;
   password_checking?: boolean;
 }
 
+type RoleName = 'host' | 'participant' | 'presenter' | 'manager';
+
+const ROLE_OPTIONS: { value: RoleName; label: string }[] = [
+  { value: 'host', label: '진행자' },
+  { value: 'participant', label: '참석자' },
+  { value: 'presenter', label: '발표자' },
+  { value: 'manager', label: '매니저' },
+];
+
 interface UpdateMembersRequestItem {
   user_id: string;
-  role_name: 'participant';
+  role_name: RoleName;
   nickname: string;
   profile: {
     user_name: string;
@@ -149,10 +159,10 @@ function extractMeetingIdFromCreateResponse(payload: unknown): string {
   );
 }
 
-function toMemberSyncItems(users: InviteUserItem[]): UpdateMembersRequestItem[] {
+function toMemberSyncItems(users: InviteUserItem[], roles: Record<string, RoleName>): UpdateMembersRequestItem[] {
   return users.map(user => ({
     user_id: user.user_id,
-    role_name: 'participant',
+    role_name: roles[user.user_id] ?? 'participant',
     nickname: user.auth_name,
     profile: {
       user_name: user.auth_name,
@@ -192,6 +202,7 @@ export default function MeetingCreatePage() {
   const [roomVisibility, setRoomVisibility] = useState<'public' | 'private'>('public');
   const [limitMode, setLimitMode] = useState<'unlimited' | 'custom'>('unlimited');
   const [memberMax, setMemberMax] = useState(30);
+  const [preEnteringMinutes, setPreEnteringMinutes] = useState(5);
   const [password, setPassword] = useState('');
 
   const [invitedUsers, setInvitedUsers] = useState<InviteUserItem[]>([]);
@@ -208,6 +219,8 @@ export default function MeetingCreatePage() {
   const [userTotalCount, setUserTotalCount] = useState(0);
   const [userItems, setUserItems] = useState<InviteUserItem[]>([]);
   const userPageSize = 8;
+
+  const [memberRoles, setMemberRoles] = useState<Record<string, RoleName>>({});
 
   const [mailModalOpen, setMailModalOpen] = useState(false);
   const [mailInviteInput, setMailInviteInput] = useState('');
@@ -322,11 +335,17 @@ export default function MeetingCreatePage() {
       }
       return [user, ...prev];
     });
+    setMemberRoles(prev => ({ ...prev, [user.user_id]: 'participant' }));
     addToast('success', '참석자가 추가되었습니다.');
   };
 
   const removeInvitedUser = (userId: string) => {
     setInvitedUsers(prev => prev.filter(user => user.user_id !== userId));
+    setMemberRoles(prev => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
   };
 
   const submitMailInvite = () => {
@@ -406,6 +425,7 @@ export default function MeetingCreatePage() {
       name: safeName,
       start_time: new Date(startTs).toISOString(),
       progress_duration: Math.floor(endTs - startTs),
+      pre_entering_duration: Math.max(0, Math.floor(preEnteringMinutes)) * 60000,
       member_max: isCustomLimit ? Math.floor(memberMax) : 0,
       entry_option: isPrivateRoom ? 'registered' : 'unlimited',
     };
@@ -421,7 +441,7 @@ export default function MeetingCreatePage() {
       const createdMeetingId = extractMeetingIdFromCreateResponse(createRes);
 
       if (createdMeetingId && invitedUsers.length > 0) {
-        const syncItems = toMemberSyncItems(invitedUsers);
+        const syncItems = toMemberSyncItems(invitedUsers, memberRoles);
         try {
           await syncMeetingMembers(createdMeetingId, syncItems);
         } catch (err) {
@@ -473,138 +493,6 @@ export default function MeetingCreatePage() {
       <div className="mm-card mm-meeting-create-card">
         <form className="mm-card-body mm-meeting-create-body" onSubmit={onSubmit}>
           <div className="mm-meeting-create-layout">
-            <section className="mm-meeting-create-left">
-              <div className="mm-meeting-create-section-head">
-                <h3 className="mm-card-title">참석자 초대 생성</h3>
-                <div className="mm-meeting-create-invite-actions">
-                  <button
-                    type="button"
-                    className="mm-btn mm-btn-secondary mm-btn-sm"
-                    onClick={() => setUserModalOpen(true)}
-                    disabled={disabledBySubmit}
-                  >
-                    <i className="bi bi-people" />
-                    참석자 초대
-                  </button>
-                  <button
-                    type="button"
-                    className="mm-btn mm-btn-secondary mm-btn-sm"
-                    onClick={() => setMailModalOpen(true)}
-                    disabled={disabledBySubmit}
-                  >
-                    <i className="bi bi-envelope" />
-                    메일 초대
-                  </button>
-                </div>
-              </div>
-
-              <div className="mm-meeting-create-toolbar">
-                <div className="mm-search-wrap mm-search-tools-input-wrap">
-                  <i className="bi bi-search" />
-                  <input
-                    className="mm-search-input"
-                    style={{ width: '100%' }}
-                    placeholder="아이디(auth_name) 검색"
-                    value={inviteSearchInput}
-                    onChange={e => setInviteSearchInput(e.target.value)}
-                    disabled={disabledBySubmit}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        submitInviteSearch();
-                      }
-                    }}
-                  />
-                </div>
-                <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitInviteSearch} disabled={disabledBySubmit}>검색</button>
-                <button
-                  type="button"
-                  className="mm-btn mm-btn-secondary mm-btn-sm"
-                  disabled={disabledBySubmit}
-                  onClick={() => {
-                    setInvitePage(1);
-                    setInviteSearchInput('');
-                    setInviteSearch('');
-                  }}
-                >
-                  초기화
-                </button>
-              </div>
-
-              <div className="mm-table-wrap">
-                <table className="mm-table mm-meeting-invite-table" style={{ tableLayout: 'fixed' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 150 }}>아이디</th>
-                      <th style={{ width: 120 }}>성명</th>
-                      <th style={{ width: 140 }}>전화번호</th>
-                      <th>메일주소</th>
-                      <th style={{ width: 88, textAlign: 'center' }}>삭제</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedInvitedUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mm-text-secondary)' }}>
-                          등록된 참석자가 없습니다.
-                        </td>
-                      </tr>
-                    ) : (
-                      pagedInvitedUsers.map(user => (
-                        <tr key={user.user_id}>
-                          <td><span className="mm-cell-ellipsis">{user.auth_name}</span></td>
-                          <td><span className="mm-cell-ellipsis">{user.user_name}</span></td>
-                          <td><span className="mm-cell-ellipsis">{user.phone_number}</span></td>
-                          <td><span className="mm-cell-ellipsis">{user.email}</span></td>
-                          <td style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="mm-btn mm-btn-danger mm-btn-sm"
-                              onClick={() => removeInvitedUser(user.user_id)}
-                              disabled={disabledBySubmit}
-                            >
-                              삭제
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-
-                <div className="mm-pagination-wrap">
-                  <div className="mm-pagination-edge mm-pagination-edge-left">
-                    <button
-                      type="button"
-                      className="mm-btn mm-btn-secondary mm-btn-sm"
-                      disabled={disabledBySubmit || safeInvitePage <= 1}
-                      onClick={() => setInvitePage(prev => Math.max(1, prev - 1))}
-                    >
-                      이전
-                    </button>
-                  </div>
-
-                  <div className="mm-pagination-pages">
-                    <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" disabled>
-                      {safeInvitePage}
-                    </button>
-                    <span style={{ color: 'var(--mm-text-secondary)', fontSize: 12 }}>/ {inviteTotalPages}</span>
-                  </div>
-
-                  <div className="mm-pagination-edge mm-pagination-edge-right">
-                    <button
-                      type="button"
-                      className="mm-btn mm-btn-secondary mm-btn-sm"
-                      disabled={disabledBySubmit || safeInvitePage >= inviteTotalPages}
-                      onClick={() => setInvitePage(prev => Math.min(inviteTotalPages, prev + 1))}
-                    >
-                      다음
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             <section className="mm-meeting-create-right">
               <div className="mm-meeting-create-grid">
                 <div className="mm-meeting-create-field">
@@ -621,42 +509,79 @@ export default function MeetingCreatePage() {
 
                 <div className="mm-meeting-create-field">
                   <label className="mm-form-label">룸설정</label>
-                  <div className="mm-toggle-group">
-                    <button
-                      type="button"
-                      className={`mm-toggle-item${roomVisibility === 'public' ? ' active' : ''}`}
-                      onClick={() => setRoomVisibility('public')}
-                      disabled={disabledBySubmit}
-                    >
-                      <i className={`bi ${roomVisibility === 'public' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
-                      공개
-                    </button>
-                    <button
-                      type="button"
-                      className={`mm-toggle-item${roomVisibility === 'private' ? ' active' : ''}`}
-                      onClick={() => setRoomVisibility('private')}
-                      disabled={disabledBySubmit}
-                    >
-                      <i className={`bi ${roomVisibility === 'private' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
-                      비공개
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="mm-toggle-group">
+                      <button
+                        type="button"
+                        className={`mm-toggle-item${roomVisibility === 'public' ? ' active' : ''}`}
+                        onClick={() => setRoomVisibility('public')}
+                        disabled={disabledBySubmit}
+                      >
+                        <i className={`bi ${roomVisibility === 'public' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
+                        공개
+                      </button>
+                      <button
+                        type="button"
+                        className={`mm-toggle-item${roomVisibility === 'private' ? ' active' : ''}`}
+                        onClick={() => setRoomVisibility('private')}
+                        disabled={disabledBySubmit}
+                      >
+                        <i className={`bi ${roomVisibility === 'private' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
+                        비공개
+                      </button>
+                    </div>
+                    {isPrivateRoom && (
+                      <input
+                        type="password"
+                        className="mm-form-control"
+                        style={{ flex: 1, minWidth: 0 }}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder={t('meetings.createForm.placeholderPassword')}
+                        autoComplete="new-password"
+                        disabled={disabledBySubmit}
+                      />
+                    )}
                   </div>
                 </div>
 
-                {isPrivateRoom && (
-                  <div className="mm-meeting-create-field mm-meeting-create-field-full">
-                    <label className="mm-form-label">룸 비밀번호</label>
-                    <input
-                      type="password"
-                      className="mm-form-control"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder={t('meetings.createForm.placeholderPassword')}
-                      autoComplete="new-password"
-                      disabled={disabledBySubmit}
-                    />
+                <div className="mm-meeting-create-field">
+                  <label className="mm-form-label">참석제한</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="mm-toggle-group">
+                      <button
+                        type="button"
+                        className={`mm-toggle-item${limitMode === 'unlimited' ? ' active' : ''}`}
+                        onClick={() => setLimitMode('unlimited')}
+                        disabled={disabledBySubmit}
+                      >
+                        <i className={`bi ${limitMode === 'unlimited' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
+                        기본(무제한)
+                      </button>
+                      <button
+                        type="button"
+                        className={`mm-toggle-item${limitMode === 'custom' ? ' active' : ''}`}
+                        onClick={() => setLimitMode('custom')}
+                        disabled={disabledBySubmit}
+                      >
+                        <i className={`bi ${limitMode === 'custom' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
+                        직접설정
+                      </button>
+                    </div>
+                    {isCustomLimit && (
+                      <input
+                        type="number"
+                        min={1}
+                        className="mm-form-control"
+                        style={{ width: 80 }}
+                        value={String(memberMax)}
+                        onChange={e => setMemberMax(Number(e.target.value || 0))}
+                        placeholder="인원 수"
+                        disabled={disabledBySubmit}
+                      />
+                    )}
                   </div>
-                )}
+                </div>
 
                 <div className="mm-meeting-create-field">
                   <label className="mm-form-label">시작일시</label>
@@ -731,42 +656,168 @@ export default function MeetingCreatePage() {
                   <p className="mm-form-hint">유지시간: {durationMinutes > 0 ? `${durationMinutes}분` : '-'}</p>
                 </div>
 
-                <div className="mm-meeting-create-field mm-meeting-create-field-full">
-                  <label className="mm-form-label">참석제한</label>
-                  <div className="mm-toggle-group">
+                <div className="mm-meeting-create-field">
+                  <label className="mm-form-label">사전 입장 허용 시간</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="number"
+                      className="mm-form-control"
+                      style={{ width: 100 }}
+                      min={0}
+                      max={60}
+                      value={preEnteringMinutes}
+                      onChange={e => setPreEnteringMinutes(Math.max(0, Number(e.target.value || 0)))}
+                      disabled={disabledBySubmit}
+                    />
+                    <span style={{ color: 'var(--mm-text-secondary)', fontSize: 14 }}>분 전부터 입장 가능</span>
+                  </div>
+                  <p className="mm-form-hint">회의 시작 전 미리 입장할 수 있는 시간입니다. (기본: 5분)</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="mm-meeting-create-left">
+              <div className="mm-meeting-create-section-head">
+                <h3 className="mm-card-title">참석자 초대 생성</h3>
+                <div className="mm-meeting-create-invite-actions">
+                  <button
+                    type="button"
+                    className="mm-btn mm-btn-secondary mm-btn-sm"
+                    onClick={() => setUserModalOpen(true)}
+                    disabled={disabledBySubmit}
+                  >
+                    <i className="bi bi-people" />
+                    참석자 초대
+                  </button>
+                  <button
+                    type="button"
+                    className="mm-btn mm-btn-secondary mm-btn-sm"
+                    onClick={() => setMailModalOpen(true)}
+                    disabled={disabledBySubmit}
+                  >
+                    <i className="bi bi-envelope" />
+                    메일 초대
+                  </button>
+                </div>
+              </div>
+
+              <div className="mm-meeting-create-toolbar">
+                <div className="mm-search-wrap mm-search-tools-input-wrap">
+                  <i className="bi bi-search" />
+                  <input
+                    className="mm-search-input"
+                    style={{ width: '100%' }}
+                    placeholder="아이디(auth_name) 검색"
+                    value={inviteSearchInput}
+                    onChange={e => setInviteSearchInput(e.target.value)}
+                    disabled={disabledBySubmit}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitInviteSearch();
+                      }
+                    }}
+                  />
+                </div>
+                <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitInviteSearch} disabled={disabledBySubmit}>검색</button>
+                <button
+                  type="button"
+                  className="mm-btn mm-btn-secondary mm-btn-sm"
+                  disabled={disabledBySubmit}
+                  onClick={() => {
+                    setInvitePage(1);
+                    setInviteSearchInput('');
+                    setInviteSearch('');
+                  }}
+                >
+                  초기화
+                </button>
+              </div>
+
+              <div className="mm-table-wrap">
+                <table className="mm-table mm-meeting-invite-table" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 140 }}>아이디</th>
+                      <th style={{ width: 110 }}>성명</th>
+                      <th style={{ width: 130 }}>전화번호</th>
+                      <th>메일주소</th>
+                      <th style={{ width: 110 }}>권한</th>
+                      <th style={{ width: 72, textAlign: 'center' }}>삭제</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedInvitedUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', color: 'var(--mm-text-secondary)' }}>
+                          등록된 참석자가 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      pagedInvitedUsers.map(user => (
+                        <tr key={user.user_id}>
+                          <td><span className="mm-cell-ellipsis">{user.auth_name}</span></td>
+                          <td><span className="mm-cell-ellipsis">{user.user_name}</span></td>
+                          <td><span className="mm-cell-ellipsis">{user.phone_number}</span></td>
+                          <td><span className="mm-cell-ellipsis">{user.email}</span></td>
+                          <td>
+                            <select
+                              className="mm-form-control"
+                              style={{ fontSize: 13, padding: '4px 6px' }}
+                              value={memberRoles[user.user_id] ?? 'participant'}
+                              onChange={e => setMemberRoles(prev => ({ ...prev, [user.user_id]: e.target.value as RoleName }))}
+                              disabled={disabledBySubmit}
+                            >
+                              {ROLE_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="mm-btn mm-btn-danger mm-btn-sm"
+                              onClick={() => removeInvitedUser(user.user_id)}
+                              disabled={disabledBySubmit}
+                            >
+                              삭제
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                <div className="mm-pagination-wrap">
+                  <div className="mm-pagination-edge mm-pagination-edge-left">
                     <button
                       type="button"
-                      className={`mm-toggle-item${limitMode === 'unlimited' ? ' active' : ''}`}
-                      onClick={() => setLimitMode('unlimited')}
-                      disabled={disabledBySubmit}
+                      className="mm-btn mm-btn-secondary mm-btn-sm"
+                      disabled={disabledBySubmit || safeInvitePage <= 1}
+                      onClick={() => setInvitePage(prev => Math.max(1, prev - 1))}
                     >
-                      <i className={`bi ${limitMode === 'unlimited' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
-                      기본(무제한)
-                    </button>
-                    <button
-                      type="button"
-                      className={`mm-toggle-item${limitMode === 'custom' ? ' active' : ''}`}
-                      onClick={() => setLimitMode('custom')}
-                      disabled={disabledBySubmit}
-                    >
-                      <i className={`bi ${limitMode === 'custom' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
-                      직접설정
+                      이전
                     </button>
                   </div>
 
-                  {isCustomLimit && (
-                    <div style={{ marginTop: 10 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        className="mm-form-control"
-                        value={String(memberMax)}
-                        onChange={e => setMemberMax(Number(e.target.value || 0))}
-                        placeholder="참석 가능 인원 수"
-                        disabled={disabledBySubmit}
-                      />
-                    </div>
-                  )}
+                  <div className="mm-pagination-pages">
+                    <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" disabled>
+                      {safeInvitePage}
+                    </button>
+                    <span style={{ color: 'var(--mm-text-secondary)', fontSize: 12 }}>/ {inviteTotalPages}</span>
+                  </div>
+
+                  <div className="mm-pagination-edge mm-pagination-edge-right">
+                    <button
+                      type="button"
+                      className="mm-btn mm-btn-secondary mm-btn-sm"
+                      disabled={disabledBySubmit || safeInvitePage >= inviteTotalPages}
+                      onClick={() => setInvitePage(prev => Math.min(inviteTotalPages, prev + 1))}
+                    >
+                      다음
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
