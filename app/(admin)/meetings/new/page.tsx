@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/Modal';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiPut } from '@/lib/api';
 import { useI18n } from '@/components/I18nProvider';
 import { useToast } from '@/components/Toast';
 
@@ -15,6 +15,25 @@ interface CreateMeetingRequest {
   entry_option: 'unlimited' | 'registered';
   password?: string;
   password_checking?: boolean;
+}
+
+interface UpdateMembersRequestItem {
+  user_id: string;
+  role_name: 'participant';
+  nickname: string;
+  profile: {
+    user_name: string;
+  };
+}
+
+interface UpdateMembersRequest {
+  method: 'set';
+  items: UpdateMembersRequestItem[];
+}
+
+interface PendingMemberSync {
+  meetingId: string;
+  items: UpdateMembersRequestItem[];
 }
 
 interface InviteUserItem {
@@ -116,6 +135,42 @@ function normalizeUserList(payload: unknown): { items: InviteUserItem[]; totalCo
   };
 }
 
+function extractMeetingIdFromCreateResponse(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return '';
+
+  const root = payload as Record<string, unknown>;
+  const result = root.result && typeof root.result === 'object'
+    ? root.result as Record<string, unknown>
+    : null;
+
+  return (
+    (result ? pickString(result, ['meeting_id', 'meetingId', 'uuid', 'id']) : '') ||
+    pickString(root, ['meeting_id', 'meetingId', 'uuid', 'id'])
+  );
+}
+
+function toMemberSyncItems(users: InviteUserItem[]): UpdateMembersRequestItem[] {
+  return users.map(user => ({
+    user_id: user.user_id,
+    role_name: 'participant',
+    nickname: user.auth_name,
+    profile: {
+      user_name: user.auth_name,
+    },
+  }));
+}
+
+async function syncMeetingMembers(meetingId: string, items: UpdateMembersRequestItem[]): Promise<void> {
+  if (!items.length) return;
+
+  const payload: UpdateMembersRequest = {
+    method: 'set',
+    items,
+  };
+
+  await apiPut(`/api/meeting/v1/meetings/${encodeURIComponent(meetingId)}/members`, payload);
+}
+
 export default function MeetingCreatePage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -156,6 +211,7 @@ export default function MeetingCreatePage() {
 
   const [mailModalOpen, setMailModalOpen] = useState(false);
   const [mailInviteInput, setMailInviteInput] = useState('');
+  const [pendingMemberSync, setPendingMemberSync] = useState<PendingMemberSync | null>(null);
 
   const startTime = useMemo(() => combineDateAndTime(startDate, startClock), [startDate, startClock]);
   const endTime = useMemo(() => combineDateAndTime(endDate, endClock), [endDate, endClock]);
@@ -247,6 +303,7 @@ export default function MeetingCreatePage() {
 
   const isPrivateRoom = roomVisibility === 'private';
   const isCustomLimit = limitMode === 'custom';
+  const disabledBySubmit = submitting || !!pendingMemberSync;
 
   const submitInviteSearch = () => {
     setInvitePage(1);
@@ -290,8 +347,30 @@ export default function MeetingCreatePage() {
     setMailModalOpen(false);
   };
 
+  async function retryMemberSync() {
+    if (!pendingMemberSync) return;
+
+    try {
+      setSubmitting(true);
+      await syncMeetingMembers(pendingMemberSync.meetingId, pendingMemberSync.items);
+      setPendingMemberSync(null);
+      addToast('success', '참석자 초대가 완료되었습니다.');
+      router.push('/meetings');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : undefined;
+      addToast('error', '참석자 초대 재시도에 실패했습니다.', message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (pendingMemberSync) {
+      addToast('warning', '미팅은 이미 생성되었습니다. 참석자 초대를 재시도해주세요.');
+      return;
+    }
 
     const safeName = name.trim();
     const safePassword = password.trim();
@@ -338,7 +417,23 @@ export default function MeetingCreatePage() {
 
     try {
       setSubmitting(true);
-      await apiPost('/api/meeting/v1/meetings', payload);
+      const createRes = await apiPost<unknown>('/api/meeting/v1/meetings', payload);
+      const createdMeetingId = extractMeetingIdFromCreateResponse(createRes);
+
+      if (createdMeetingId && invitedUsers.length > 0) {
+        const syncItems = toMemberSyncItems(invitedUsers);
+        try {
+          await syncMeetingMembers(createdMeetingId, syncItems);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : undefined;
+          setPendingMemberSync({ meetingId: createdMeetingId, items: syncItems });
+          setUserModalOpen(false);
+          setMailModalOpen(false);
+          addToast('warning', '미팅은 생성되었지만 참석자 초대에 실패했습니다.', message);
+          return;
+        }
+      }
+
       addToast('success', t('meetings.createForm.createdTitle'), t('meetings.createForm.createdMessage'));
       router.push('/meetings');
     } catch (err) {
@@ -358,6 +453,23 @@ export default function MeetingCreatePage() {
         </div>
       </div>
 
+      {pendingMemberSync && (
+        <div className="mm-meeting-create-sync-warning" role="alert">
+          <div>
+            <p className="mm-meeting-create-sync-warning-title">미팅은 생성되었습니다.</p>
+            <p className="mm-meeting-create-sync-warning-desc">참석자 초대 중 오류가 발생했습니다. 재시도를 눌러 다시 등록해 주세요.</p>
+          </div>
+          <div className="mm-meeting-create-sync-warning-actions">
+            <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={retryMemberSync} disabled={submitting}>
+              참석자 초대 재시도
+            </button>
+            <button type="button" className="mm-btn mm-btn-secondary mm-btn-sm" onClick={() => router.push('/meetings')} disabled={submitting}>
+              목록으로 이동
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mm-card mm-meeting-create-card">
         <form className="mm-card-body mm-meeting-create-body" onSubmit={onSubmit}>
           <div className="mm-meeting-create-layout">
@@ -369,6 +481,7 @@ export default function MeetingCreatePage() {
                     type="button"
                     className="mm-btn mm-btn-secondary mm-btn-sm"
                     onClick={() => setUserModalOpen(true)}
+                    disabled={disabledBySubmit}
                   >
                     <i className="bi bi-people" />
                     참석자 초대
@@ -377,6 +490,7 @@ export default function MeetingCreatePage() {
                     type="button"
                     className="mm-btn mm-btn-secondary mm-btn-sm"
                     onClick={() => setMailModalOpen(true)}
+                    disabled={disabledBySubmit}
                   >
                     <i className="bi bi-envelope" />
                     메일 초대
@@ -393,6 +507,7 @@ export default function MeetingCreatePage() {
                     placeholder="아이디(auth_name) 검색"
                     value={inviteSearchInput}
                     onChange={e => setInviteSearchInput(e.target.value)}
+                    disabled={disabledBySubmit}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -401,10 +516,11 @@ export default function MeetingCreatePage() {
                     }}
                   />
                 </div>
-                <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitInviteSearch}>검색</button>
+                <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitInviteSearch} disabled={disabledBySubmit}>검색</button>
                 <button
                   type="button"
                   className="mm-btn mm-btn-secondary mm-btn-sm"
+                  disabled={disabledBySubmit}
                   onClick={() => {
                     setInvitePage(1);
                     setInviteSearchInput('');
@@ -445,6 +561,7 @@ export default function MeetingCreatePage() {
                               type="button"
                               className="mm-btn mm-btn-danger mm-btn-sm"
                               onClick={() => removeInvitedUser(user.user_id)}
+                              disabled={disabledBySubmit}
                             >
                               삭제
                             </button>
@@ -460,7 +577,7 @@ export default function MeetingCreatePage() {
                     <button
                       type="button"
                       className="mm-btn mm-btn-secondary mm-btn-sm"
-                      disabled={safeInvitePage <= 1}
+                      disabled={disabledBySubmit || safeInvitePage <= 1}
                       onClick={() => setInvitePage(prev => Math.max(1, prev - 1))}
                     >
                       이전
@@ -478,7 +595,7 @@ export default function MeetingCreatePage() {
                     <button
                       type="button"
                       className="mm-btn mm-btn-secondary mm-btn-sm"
-                      disabled={safeInvitePage >= inviteTotalPages}
+                      disabled={disabledBySubmit || safeInvitePage >= inviteTotalPages}
                       onClick={() => setInvitePage(prev => Math.min(inviteTotalPages, prev + 1))}
                     >
                       다음
@@ -498,6 +615,7 @@ export default function MeetingCreatePage() {
                     onChange={e => setName(e.target.value)}
                     placeholder={t('meetings.createForm.placeholderName')}
                     autoComplete="off"
+                    disabled={disabledBySubmit}
                   />
                 </div>
 
@@ -508,6 +626,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className={`mm-toggle-item${roomVisibility === 'public' ? ' active' : ''}`}
                       onClick={() => setRoomVisibility('public')}
+                      disabled={disabledBySubmit}
                     >
                       <i className={`bi ${roomVisibility === 'public' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
                       공개
@@ -516,6 +635,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className={`mm-toggle-item${roomVisibility === 'private' ? ' active' : ''}`}
                       onClick={() => setRoomVisibility('private')}
+                      disabled={disabledBySubmit}
                     >
                       <i className={`bi ${roomVisibility === 'private' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
                       비공개
@@ -533,6 +653,7 @@ export default function MeetingCreatePage() {
                       onChange={e => setPassword(e.target.value)}
                       placeholder={t('meetings.createForm.placeholderPassword')}
                       autoComplete="new-password"
+                      disabled={disabledBySubmit}
                     />
                   </div>
                 )}
@@ -558,6 +679,7 @@ export default function MeetingCreatePage() {
                             setEndClock(adjustedEnd.time);
                           }
                         }}
+                        disabled={disabledBySubmit}
                       />
                     </div>
                     <div className="mm-datetime-control">
@@ -578,6 +700,7 @@ export default function MeetingCreatePage() {
                             setEndClock(adjustedEnd.time);
                           }
                         }}
+                        disabled={disabledBySubmit}
                       />
                     </div>
                   </div>
@@ -592,6 +715,7 @@ export default function MeetingCreatePage() {
                         className="mm-form-control mm-datetime-input"
                         value={endDate}
                         onChange={e => setEndDate(e.target.value)}
+                        disabled={disabledBySubmit}
                       />
                     </div>
                     <div className="mm-datetime-control">
@@ -600,6 +724,7 @@ export default function MeetingCreatePage() {
                         className="mm-form-control mm-datetime-input"
                         value={endClock}
                         onChange={e => setEndClock(e.target.value)}
+                        disabled={disabledBySubmit}
                       />
                     </div>
                   </div>
@@ -613,6 +738,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className={`mm-toggle-item${limitMode === 'unlimited' ? ' active' : ''}`}
                       onClick={() => setLimitMode('unlimited')}
+                      disabled={disabledBySubmit}
                     >
                       <i className={`bi ${limitMode === 'unlimited' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
                       기본(무제한)
@@ -621,6 +747,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className={`mm-toggle-item${limitMode === 'custom' ? ' active' : ''}`}
                       onClick={() => setLimitMode('custom')}
+                      disabled={disabledBySubmit}
                     >
                       <i className={`bi ${limitMode === 'custom' ? 'bi-check-circle-fill' : 'bi-circle'}`} />
                       직접설정
@@ -636,6 +763,7 @@ export default function MeetingCreatePage() {
                         value={String(memberMax)}
                         onChange={e => setMemberMax(Number(e.target.value || 0))}
                         placeholder="참석 가능 인원 수"
+                        disabled={disabledBySubmit}
                       />
                     </div>
                   )}
@@ -653,15 +781,24 @@ export default function MeetingCreatePage() {
             >
               {t('meetings.createForm.cancel')}
             </button>
-            <button type="submit" className="mm-btn mm-btn-primary" disabled={submitting}>
+            <button type="submit" className="mm-btn mm-btn-primary" disabled={disabledBySubmit}>
               {submitting ? t('meetings.createForm.submitting') : t('meetings.createForm.submit')}
             </button>
           </div>
         </form>
       </div>
 
+      {submitting && (
+        <div className="mm-meeting-create-overlay" role="status" aria-live="polite" aria-label="미팅 등록 중입니다.">
+          <div className="mm-meeting-create-overlay-card">
+            <div className="spinner-border text-primary" style={{ width: 24, height: 24, borderWidth: 2 }} />
+            <p>미팅 등록 중입니다.</p>
+          </div>
+        </div>
+      )}
+
       <Modal
-        open={userModalOpen}
+        open={userModalOpen && !disabledBySubmit}
         title="참석자 초대"
         onClose={() => setUserModalOpen(false)}
         size="lg"
@@ -677,6 +814,7 @@ export default function MeetingCreatePage() {
                   placeholder="아이디(auth_name) 검색"
                   value={userQueryInput}
                   onChange={e => setUserQueryInput(e.target.value)}
+                  disabled={disabledBySubmit}
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -685,10 +823,11 @@ export default function MeetingCreatePage() {
                   }}
                 />
               </div>
-              <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitUserSearch}>검색</button>
+              <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitUserSearch} disabled={disabledBySubmit}>검색</button>
               <button
                 type="button"
                 className="mm-btn mm-btn-secondary mm-btn-sm"
+                disabled={disabledBySubmit}
                 onClick={() => {
                   setUserQueryInput('');
                   setUserQuery('');
@@ -738,6 +877,7 @@ export default function MeetingCreatePage() {
                                   type="button"
                                   className="mm-btn mm-btn-primary mm-btn-sm"
                                   onClick={() => addInvitedUser(user)}
+                                  disabled={disabledBySubmit}
                                 >
                                   추가
                                 </button>
@@ -762,7 +902,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className="mm-btn mm-btn-secondary mm-btn-sm"
                       onClick={() => setUserPage(prev => Math.max(1, prev - 1))}
-                      disabled={safeUserPage <= 1}
+                      disabled={disabledBySubmit || safeUserPage <= 1}
                     >
                       이전
                     </button>
@@ -778,7 +918,7 @@ export default function MeetingCreatePage() {
                       type="button"
                       className="mm-btn mm-btn-secondary mm-btn-sm"
                       onClick={() => setUserPage(prev => Math.min(userTotalPages, prev + 1))}
-                      disabled={safeUserPage >= userTotalPages}
+                      disabled={disabledBySubmit || safeUserPage >= userTotalPages}
                     >
                       다음
                     </button>
@@ -791,14 +931,14 @@ export default function MeetingCreatePage() {
       </Modal>
 
       <Modal
-        open={mailModalOpen}
+        open={mailModalOpen && !disabledBySubmit}
         title="메일 초대"
         onClose={() => setMailModalOpen(false)}
         size="sm"
         footer={
           <>
-            <button type="button" className="mm-btn mm-btn-secondary mm-btn-sm" onClick={() => setMailModalOpen(false)}>취소</button>
-            <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitMailInvite}>등록</button>
+            <button type="button" className="mm-btn mm-btn-secondary mm-btn-sm" onClick={() => setMailModalOpen(false)} disabled={disabledBySubmit}>취소</button>
+            <button type="button" className="mm-btn mm-btn-primary mm-btn-sm" onClick={submitMailInvite} disabled={disabledBySubmit}>등록</button>
           </>
         }
       >
@@ -808,6 +948,7 @@ export default function MeetingCreatePage() {
           type="email"
           value={mailInviteInput}
           onChange={e => setMailInviteInput(e.target.value)}
+          disabled={disabledBySubmit}
           placeholder="invite@example.com"
           autoComplete="off"
         />

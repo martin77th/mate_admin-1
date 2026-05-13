@@ -227,6 +227,26 @@ Request Body:
 }
 ```
 
+### 회의 참가자 등록/수정
+```
+PUT /api/meeting/v1/meetings/{meeting_id}/members
+
+Request Body:
+{
+  "method": "string", // "add" | "remove" | "set" | "reset"
+  "items": [
+    {
+      "user_id": "string",         // 사용자 UUID (필수)
+      "role_name": "string",       // "host" | "manager" | "participant" (기본 participant)
+      "nickname": "string",        // 닉네임 (옵션)
+      "profile": {
+        "user_name": "string"      // 사용자명 (옵션)
+      }
+    }
+  ]
+}
+```
+
 ### 회의 종료
 ```
 POST /api/meeting/v1/meetings/{meeting_id}/close
