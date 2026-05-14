@@ -92,3 +92,44 @@ docker compose --env-file deploy/.env.prod -f docker-compose.prod.yml logs -f ca
 
 - 설정 페이지의 정책 저장은 현재 "골격만 준비, 실제 반영 비활성화" 상태입니다.
 - 실제 정책 저장 적용 시, 백엔드 정책 API의 세부 payload 스키마 확정이 필요합니다.
+
+## 9) 폐쇄망(Air-gapped) 배포 가이드
+
+폐쇄망에서는 외부 인증서 발급(ACME/Let's Encrypt)을 사용할 수 없으므로, 로컬 인증서를 직접 마운트해야 합니다.
+
+### 9-1) 앱 기본 API 주소 정책
+
+- 코드 기본값은 외부 도메인 fallback을 사용하지 않습니다.
+- `NEXT_PUBLIC_API_BASE_URL`을 주입하지 않으면 기본값은 빈 문자열이며, 로그인 설정 화면에서 내부 API 주소를 지정해야 합니다.
+
+### 9-2) Caddy 설정 전환
+
+기본 `deploy/Caddyfile`은 ACME 기반입니다. 폐쇄망에서는 아래 파일을 사용하세요.
+
+- 폐쇄망용 파일: `deploy/Caddyfile.airgap`
+- TLS 인증서 경로: `/certs/admin.crt`, `/certs/admin.key`
+
+예시:
+
+```bash
+cp deploy/Caddyfile.airgap deploy/Caddyfile
+```
+
+그리고 `caddy` 서비스에 인증서 볼륨을 추가 마운트합니다.
+
+```yaml
+services:
+  caddy:
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+```
+
+### 9-3) 폐쇄망 검증 체크
+
+- 외부 DNS/인터넷이 차단된 환경에서 컨테이너 기동 여부 확인
+- `docker compose --env-file deploy/.env.prod -f docker-compose.prod.yml config` 통과 확인
+- 브라우저 접속 후 로그인 설정에서 내부 API 주소 지정/연결 테스트
+- 사용자/미팅 목록 조회로 내부 API 통신 확인

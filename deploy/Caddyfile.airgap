@@ -1,0 +1,20 @@
+{$ADMIN_DOMAIN} {
+  encode zstd gzip
+
+  @health path /healthz
+  respond @health 200
+
+  header {
+    -Server
+    X-Frame-Options "DENY"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  }
+
+  # Air-gapped environments should provide cert/key via local mount.
+  tls /certs/admin.crt /certs/admin.key
+
+  reverse_proxy app:3000
+}

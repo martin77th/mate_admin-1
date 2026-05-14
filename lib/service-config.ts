@@ -1,7 +1,7 @@
 const ENV_DEFAULT_API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').trim();
-const LEGACY_DEFAULT_API_BASE_URL = 'https://mate3.dev.meetmate.co.kr';
 
-export const DEFAULT_API_BASE_URL = ENV_DEFAULT_API_BASE_URL || LEGACY_DEFAULT_API_BASE_URL;
+// Do not fallback to external endpoints by default.
+export const DEFAULT_API_BASE_URL = ENV_DEFAULT_API_BASE_URL;
 export const API_BASE_URL_STORAGE_KEY = 'mm_api_base_url';
 
 function normalizeBaseUrl(value: string): string {
