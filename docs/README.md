@@ -5,6 +5,7 @@
 - [API 명세](API_SPEC.md)
 - [UI 디자인 가이드](UI_DESIGN_GUIDE.md)
 - [도커 개발 계획](DOCKER_DEV_PLAN.md)
+- [운영 배포 가이드](PROD_DEPLOYMENT_GUIDE.md)
 - [다국어 적용 계획](I18N_ROLLOUT_PLAN.md)
 - [에이전트 가이드](AGENTS.md)
 - [Claude 프롬프트 가이드](CLAUDE.md)

@@ -5,3 +5,9 @@ node_modules
 docker-compose*.yml
 npm-debug.log*
 coverage
+.DS_Store
+*.log
+docs
+.vscode
+tmp
+dist

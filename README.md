@@ -55,6 +55,20 @@ Detailed plan and 운영 기준 are documented in:
 
 `docs/DOCKER_DEV_PLAN.md`
 
+## Production Deployment (Docker + Domain)
+
+```bash
+cp deploy/.env.prod.example deploy/.env.prod
+# edit deploy/.env.prod
+
+docker compose --env-file deploy/.env.prod -f docker-compose.prod.yml build --no-cache
+docker compose --env-file deploy/.env.prod -f docker-compose.prod.yml up -d
+```
+
+Production security/deployment checklist:
+
+`docs/PROD_DEPLOYMENT_GUIDE.md`
+
 Documentation index:
 
 `docs/README.md`

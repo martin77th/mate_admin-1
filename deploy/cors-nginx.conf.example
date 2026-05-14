@@ -1,0 +1,28 @@
+# Example Nginx CORS policy for backend API server
+# Allow only frontend admin origin and required headers.
+
+map $http_origin $cors_allow_origin {
+    default "";
+    "https://admin.example.com" "https://admin.example.com";
+}
+
+server {
+    # ...
+
+    location / {
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "GET,POST,PUT,DELETE,OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Authorization,Content-Type,X-Mate-Tenant-ID" always;
+            add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Max-Age 86400 always;
+            return 204;
+        }
+
+        add_header Access-Control-Allow-Origin $cors_allow_origin always;
+        add_header Access-Control-Allow-Credentials "true" always;
+        add_header Vary "Origin" always;
+
+        proxy_pass http://backend_upstream;
+    }
+}
