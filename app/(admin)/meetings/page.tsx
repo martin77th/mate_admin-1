@@ -8,7 +8,7 @@ import { formatDateTime, formatNumber, meetingStatusBadge } from '@/lib/utils';
 import { useI18n } from '@/components/I18nProvider';
 import Modal, { ConfirmModal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { startMeetingEnterFlow } from '@/lib/meeting-enter';
+import { POPUP_FALLBACK_USED_MESSAGE, getDefaultMeetingRedirectUrl, startMeetingEnterFlow } from '@/lib/meeting-enter';
 import type { Locale } from '@/lib/i18n';
 
 interface MeetingItem {
@@ -210,6 +210,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
   const [memberCountMap, setMemberCountMap] = useState<Record<string, number | null>>({});
   const [attendTargetMeeting, setAttendTargetMeeting] = useState<MeetingItem | null>(null);
   const [attendPassword, setAttendPassword] = useState('');
+  const [attendRedirectUrl, setAttendRedirectUrl] = useState('');
   const [attendingMeetingId, setAttendingMeetingId] = useState<string | null>(null);
 
   const isHistoryMode = !onlyEnterable;
@@ -406,12 +407,18 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
   };
 
   const getErrorMessage = (err: unknown): string | undefined => {
-    if (err instanceof ApiError) return err.message;
-    if (err instanceof Error) return err.message;
-    return undefined;
+    const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : '';
+    if (!message) return undefined;
+
+    if (message === 'popup_open_blocked') return t('meetings.attendPopupBlockedMessage');
+    if (message === 'redirect url is invalid' || message === 'redirect url must start with http:// or https://') {
+      return t('meetings.attendRedirectUrlInvalidMessage');
+    }
+
+    return message;
   };
 
-  const executeAttendFlow = async (meeting: MeetingItem, passwordInput = ''): Promise<boolean> => {
+  const executeAttendFlow = async (meeting: MeetingItem, passwordInput = '', redirectUrlInput = ''): Promise<boolean> => {
     if (!meeting.meeting_id) {
       addToast('warning', t('meetings.detailNotFoundTitle'));
       return false;
@@ -422,10 +429,19 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
     setAttendingMeetingId(meetingId);
 
     try {
-      await startMeetingEnterFlow({ meetingId, password });
+      await startMeetingEnterFlow({
+        meetingId,
+        password,
+        redirectUrlOverride: redirectUrlInput,
+        openInPopup: true,
+      });
       addToast('info', t('meetings.attendRedirectingTitle'), t('meetings.attendRedirectingMessage'));
       return true;
     } catch (err) {
+      if (err instanceof Error && err.message === POPUP_FALLBACK_USED_MESSAGE) {
+        addToast('info', t('meetings.attendFallbackTitle'), t('meetings.attendFallbackMessage'));
+        return true;
+      }
       addToast('error', t('meetings.attendFailedTitle'), getErrorMessage(err));
       return false;
     } finally {
@@ -439,27 +455,35 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
       return;
     }
 
-    if (isMeetingPasswordRequired(meeting)) {
-      setAttendPassword('');
-      setAttendTargetMeeting(meeting);
-      return;
+    setAttendPassword('');
+    try {
+      setAttendRedirectUrl(getDefaultMeetingRedirectUrl());
+    } catch {
+      setAttendRedirectUrl('');
     }
-
-    await executeAttendFlow(meeting);
+    setAttendTargetMeeting(meeting);
   };
 
   const submitAttendMeeting = async () => {
     if (!attendTargetMeeting) return;
 
-    if (isMeetingPasswordRequired(attendTargetMeeting) && !attendPassword.trim()) {
+    const passwordRequired = isMeetingPasswordRequired(attendTargetMeeting);
+
+    if (passwordRequired && !attendPassword.trim()) {
       addToast('warning', t('meetings.attendPasswordRequiredTitle'), t('meetings.attendPasswordRequiredMessage'));
       return;
     }
 
-    const success = await executeAttendFlow(attendTargetMeeting, attendPassword);
+    if (!attendRedirectUrl.trim()) {
+      addToast('warning', t('meetings.attendRedirectUrlRequiredTitle'), t('meetings.attendRedirectUrlRequiredMessage'));
+      return;
+    }
+
+    const success = await executeAttendFlow(attendTargetMeeting, attendPassword, attendRedirectUrl);
     if (success) {
       setAttendTargetMeeting(null);
       setAttendPassword('');
+      setAttendRedirectUrl('');
     }
   };
 
@@ -780,11 +804,12 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
 
       <Modal
         open={!isHistoryMode && !!attendTargetMeeting}
-        title={t('meetings.attendPasswordModalTitle')}
+        title={t('meetings.attendLaunchModalTitle')}
         onClose={() => {
           if (attendingMeetingId === attendTargetMeeting?.meeting_id) return;
           setAttendTargetMeeting(null);
           setAttendPassword('');
+          setAttendRedirectUrl('');
         }}
         size="sm"
         footer={
@@ -796,6 +821,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                 if (attendingMeetingId === attendTargetMeeting?.meeting_id) return;
                 setAttendTargetMeeting(null);
                 setAttendPassword('');
+                setAttendRedirectUrl('');
               }}
               disabled={attendingMeetingId === attendTargetMeeting?.meeting_id}
             >
@@ -815,13 +841,13 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
         }
       >
         <div style={{ display: 'grid', gap: 8 }}>
-          <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendPasswordLabel')}</label>
+          <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendRedirectUrlLabel')}</label>
           <input
-            type="password"
+            type="url"
             className="mm-form-control"
-            value={attendPassword}
-            placeholder={t('meetings.attendPasswordPlaceholder')}
-            onChange={e => setAttendPassword(e.target.value)}
+            value={attendRedirectUrl}
+            placeholder={t('meetings.attendRedirectUrlPlaceholder')}
+            onChange={e => setAttendRedirectUrl(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -830,6 +856,25 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
             }}
             disabled={attendingMeetingId === attendTargetMeeting?.meeting_id}
           />
+          {attendTargetMeeting && isMeetingPasswordRequired(attendTargetMeeting) && (
+            <>
+              <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendPasswordLabel')}</label>
+              <input
+                type="password"
+                className="mm-form-control"
+                value={attendPassword}
+                placeholder={t('meetings.attendPasswordPlaceholder')}
+                onChange={e => setAttendPassword(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitAttendMeeting();
+                  }
+                }}
+                disabled={attendingMeetingId === attendTargetMeeting?.meeting_id}
+              />
+            </>
+          )}
         </div>
       </Modal>
     </>

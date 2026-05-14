@@ -8,7 +8,7 @@ import Modal, { ConfirmModal } from '@/components/Modal';
 import { useI18n } from '@/components/I18nProvider';
 import { useToast } from '@/components/Toast';
 import { getAuthContext, getAccessToken } from '@/lib/auth';
-import { startMeetingEnterFlow } from '@/lib/meeting-enter';
+import { POPUP_FALLBACK_USED_MESSAGE, getDefaultMeetingRedirectUrl, startMeetingEnterFlow } from '@/lib/meeting-enter';
 import { getConfiguredApiBaseUrl } from '@/lib/service-config';
 import {
   addMinutes,
@@ -186,6 +186,7 @@ export default function MeetingDetailPage() {
   const [chatLogDownloading, setChatLogDownloading] = useState(false);
   const [attendPasswordModalOpen, setAttendPasswordModalOpen] = useState(false);
   const [attendPassword, setAttendPassword] = useState('');
+  const [attendRedirectUrl, setAttendRedirectUrl] = useState('');
   const [attending, setAttending] = useState(false);
 
   const returnToListHref = useMemo(() => {
@@ -290,19 +291,34 @@ export default function MeetingDetailPage() {
   };
 
   const getErrorMessage = (err: unknown): string | undefined => {
-    if (err instanceof ApiError) return err.message;
-    if (err instanceof Error) return err.message;
-    return undefined;
+    const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : '';
+    if (!message) return undefined;
+
+    if (message === 'popup_open_blocked') return t('meetings.attendPopupBlockedMessage');
+    if (message === 'redirect url is invalid' || message === 'redirect url must start with http:// or https://') {
+      return t('meetings.attendRedirectUrlInvalidMessage');
+    }
+
+    return message;
   };
 
-  const executeAttend = async (passwordInput = '') => {
+  const executeAttend = async (passwordInput = '', redirectUrlInput = '') => {
     if (!meetingId) return;
 
     try {
       setAttending(true);
-      await startMeetingEnterFlow({ meetingId, password: passwordInput.trim() });
+      await startMeetingEnterFlow({
+        meetingId,
+        password: passwordInput.trim(),
+        redirectUrlOverride: redirectUrlInput,
+        openInPopup: true,
+      });
       addToast('info', t('meetings.attendRedirectingTitle'), t('meetings.attendRedirectingMessage'));
     } catch (err) {
+      if (err instanceof Error && err.message === POPUP_FALLBACK_USED_MESSAGE) {
+        addToast('info', t('meetings.attendFallbackTitle'), t('meetings.attendFallbackMessage'));
+        return;
+      }
       addToast('error', t('meetings.attendFailedTitle'), getErrorMessage(err));
     } finally {
       setAttending(false);
@@ -312,13 +328,13 @@ export default function MeetingDetailPage() {
   const onAttend = async () => {
     if (!meeting) return;
 
-    if (meeting.password_checking) {
-      setAttendPassword('');
-      setAttendPasswordModalOpen(true);
-      return;
+    setAttendPassword('');
+    try {
+      setAttendRedirectUrl(getDefaultMeetingRedirectUrl());
+    } catch {
+      setAttendRedirectUrl('');
     }
-
-    await executeAttend();
+    setAttendPasswordModalOpen(true);
   };
 
   const submitAttendWithPassword = async () => {
@@ -327,7 +343,12 @@ export default function MeetingDetailPage() {
       return;
     }
 
-    await executeAttend(attendPassword);
+    if (!attendRedirectUrl.trim()) {
+      addToast('warning', t('meetings.attendRedirectUrlRequiredTitle'), t('meetings.attendRedirectUrlRequiredMessage'));
+      return;
+    }
+
+    await executeAttend(attendPassword, attendRedirectUrl);
   };
 
   const fetchIceServers = async () => {
@@ -755,11 +776,12 @@ export default function MeetingDetailPage() {
 
       <Modal
         open={attendPasswordModalOpen}
-        title={t('meetings.attendPasswordModalTitle')}
+        title={t('meetings.attendLaunchModalTitle')}
         onClose={() => {
           if (attending) return;
           setAttendPasswordModalOpen(false);
           setAttendPassword('');
+          setAttendRedirectUrl('');
         }}
         size="sm"
         footer={
@@ -771,6 +793,7 @@ export default function MeetingDetailPage() {
                 if (attending) return;
                 setAttendPasswordModalOpen(false);
                 setAttendPassword('');
+                setAttendRedirectUrl('');
               }}
               disabled={attending}
             >
@@ -790,13 +813,13 @@ export default function MeetingDetailPage() {
         }
       >
         <div style={{ display: 'grid', gap: 8 }}>
-          <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendPasswordLabel')}</label>
+          <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendRedirectUrlLabel')}</label>
           <input
-            type="password"
+            type="url"
             className="mm-form-control"
-            value={attendPassword}
-            placeholder={t('meetings.attendPasswordPlaceholder')}
-            onChange={e => setAttendPassword(e.target.value)}
+            value={attendRedirectUrl}
+            placeholder={t('meetings.attendRedirectUrlPlaceholder')}
+            onChange={e => setAttendRedirectUrl(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -805,6 +828,25 @@ export default function MeetingDetailPage() {
             }}
             disabled={attending}
           />
+          {meeting?.password_checking && (
+            <>
+              <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendPasswordLabel')}</label>
+              <input
+                type="password"
+                className="mm-form-control"
+                value={attendPassword}
+                placeholder={t('meetings.attendPasswordPlaceholder')}
+                onChange={e => setAttendPassword(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitAttendWithPassword();
+                  }
+                }}
+                disabled={attending}
+              />
+            </>
+          )}
         </div>
       </Modal>
     </section>

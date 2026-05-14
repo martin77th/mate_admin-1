@@ -5,7 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import { useI18n } from '@/components/I18nProvider';
 import { useToast } from '@/components/Toast';
 import { getAccessToken, getAuthContext } from '@/lib/auth';
-import { getConfiguredApiBaseUrl, isValidApiBaseUrl, saveApiBaseUrl } from '@/lib/service-config';
+import {
+  getConfiguredApiBaseUrl,
+  isValidApiBaseUrl,
+  saveApiBaseUrl,
+} from '@/lib/service-config';
 
 type SettingsMenuKey =
   | 'meetingPolicy'
@@ -459,6 +463,7 @@ export default function SettingsPage() {
       const headers: Record<string, string> = { Accept: 'application/json' };
       const method = options?.method ?? 'GET';
       const body = options?.body;
+
       if (body !== undefined) {
         headers['Content-Type'] = 'application/json';
       }
