@@ -67,7 +67,7 @@ docker compose --env-file deploy/.env.prod -f docker-compose.prod.yml up -d
 
 Production security/deployment checklist:
 
-`docs/PROD_DEPLOYMENT_GUIDE.md`
+`PROD_DEPLOYMENT_GUIDE.md`
 
 Documentation index:
 

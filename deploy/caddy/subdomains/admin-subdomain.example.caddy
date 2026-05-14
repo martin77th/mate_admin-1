@@ -1,12 +1,6 @@
-{
-  email {$ACME_EMAIL}
-}
-
-{$ADMIN_DOMAIN} {
+# Example: additional HTTPS subdomain for the same app service
+ops-admin.example.com {
   encode zstd gzip
-
-  @health path /healthz
-  respond @health 200
 
   header {
     -Server
@@ -19,6 +13,3 @@
 
   reverse_proxy app:3000
 }
-
-# Optional extra subdomain routes.
-import /etc/caddy/subdomains/*.caddy

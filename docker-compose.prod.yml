@@ -41,6 +41,7 @@ services:
       - ./deploy/.env.prod
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/subdomains:/etc/caddy/subdomains:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
