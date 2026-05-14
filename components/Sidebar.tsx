@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useI18n } from '@/components/I18nProvider';
 
 const PRIMARY_NAV_ITEMS = [
@@ -17,6 +17,12 @@ const TAIL_NAV_ITEMS = [
   { href: '/settings', icon: 'bi-gear-fill', labelKey: 'page.settings' },
 ];
 
+const SETTINGS_SUB_ITEMS = [
+  { href: '/settings?section=meetingPolicy', icon: 'bi-camera-video', labelKey: 'settings.menu.meetingPolicy' },
+  { href: '/settings?section=userPolicy', icon: 'bi-person-gear', labelKey: 'settings.menu.userPolicy' },
+  { href: '/settings?section=apiCatalog', icon: 'bi-list-check', labelKey: 'settings.menu.apiCatalog' },
+];
+
 interface SidebarProps {
   collapsed: boolean;
   onToggleSidebar: () => void;
@@ -26,6 +32,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggleSidebar, mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
 
   const isNavItemActive = (href: string) => {
@@ -38,6 +45,8 @@ export default function Sidebar({ collapsed, onToggleSidebar, mobileOpen = false
   };
 
   const isMeetingGroupActive = pathname === '/meetings' || pathname.startsWith('/meetings/');
+  const isSettingsGroupActive = pathname === '/settings' || pathname.startsWith('/settings/');
+  const activeSettingsSection = searchParams.get('section') ?? 'meetingPolicy';
 
   return (
     <aside className={`mm-sidebar${collapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
@@ -97,15 +106,35 @@ export default function Sidebar({ collapsed, onToggleSidebar, mobileOpen = false
         </div>
 
         {TAIL_NAV_ITEMS.map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`mm-nav-item${isNavItemActive(item.href) ? ' active' : ''}`}
-            onClick={onNavigate}
-          >
-            <i className={`bi ${item.icon} mm-nav-item-icon`} />
-            <span className="mm-nav-item-label">{t(item.labelKey)}</span>
-          </Link>
+          <div key={item.href} className={`mm-nav-group${isSettingsGroupActive ? ' active' : ''}`}>
+            <Link
+              href={item.href}
+              className={`mm-nav-item mm-nav-item-parent${isNavItemActive(item.href) ? ' active' : ''}`}
+              onClick={onNavigate}
+              aria-current={isSettingsGroupActive ? 'page' : undefined}
+            >
+              <i className={`bi ${item.icon} mm-nav-item-icon`} />
+              <span className="mm-nav-item-label">{t(item.labelKey)}</span>
+            </Link>
+
+            <div className="mm-nav-submenu">
+              {SETTINGS_SUB_ITEMS.map(sub => {
+                const section = sub.href.split('section=')[1] ?? '';
+                const isActive = isSettingsGroupActive && activeSettingsSection === section;
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    className={`mm-nav-item mm-nav-sub-item${isActive ? ' active' : ''}`}
+                    onClick={onNavigate}
+                  >
+                    <i className={`bi ${sub.icon} mm-nav-item-icon`} />
+                    <span className="mm-nav-item-label">{t(sub.labelKey)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
     </aside>

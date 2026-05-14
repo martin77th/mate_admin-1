@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -22,7 +22,18 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   '/settings': 'page.settings',
 };
 
-function getPageTitle(pathname: string, t: (key: string) => string): string {
+const SETTINGS_SECTION_TITLE_KEYS: Record<string, string> = {
+  meetingPolicy: 'settings.menu.meetingPolicy',
+  userPolicy: 'settings.menu.userPolicy',
+  apiCatalog: 'settings.menu.apiCatalog',
+};
+
+function getPageTitle(pathname: string, section: string | null, t: (key: string) => string): string {
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) {
+    const titleKey = (section && SETTINGS_SECTION_TITLE_KEYS[section]) || SETTINGS_SECTION_TITLE_KEYS.meetingPolicy;
+    return t(titleKey);
+  }
+
   if (pathname.startsWith('/meetings/') && pathname.endsWith('/edit')) {
     return t('page.meetingsEdit');
   }
@@ -37,6 +48,7 @@ function getPageTitle(pathname: string, t: (key: string) => string): string {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -86,7 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
         )}
         <main className={`mm-main${collapsed ? ' collapsed' : ''}`}>
-          <Header title={getPageTitle(pathname, t)} onToggleMobileMenu={() => setMobileMenuOpen(v => !v)} />
+          <Header title={getPageTitle(pathname, searchParams.get('section'), t)} onToggleMobileMenu={() => setMobileMenuOpen(v => !v)} />
           <div className="mm-content">{children}</div>
           <MobileBottomNav />
         </main>
