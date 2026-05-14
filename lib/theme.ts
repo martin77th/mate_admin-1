@@ -14,7 +14,10 @@ export function normalizeThemePreference(value?: string | null): ThemePreference
 }
 
 export function resolveThemeFromPreference(preference: ThemePreference): Theme {
-  return preference === SYSTEM_THEME_VALUE ? getSystemTheme() : preference;
+  if (preference === SYSTEM_THEME_VALUE) {
+    return getSystemTheme();
+  }
+  return normalizeTheme(preference);
 }
 
 export function getSystemTheme(): Theme {

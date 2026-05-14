@@ -932,7 +932,10 @@ export function normalizeLocalePreference(value?: string | null): LocalePreferen
 }
 
 export function resolveLocaleFromPreference(preference: LocalePreference, languages?: readonly string[]): Locale {
-  return preference === SYSTEM_LOCALE_VALUE ? getSystemLocale(languages) : preference;
+  if (preference === SYSTEM_LOCALE_VALUE) {
+    return getSystemLocale(languages);
+  }
+  return normalizeLocale(preference);
 }
 
 export function getSystemLocale(languages?: readonly string[]): Locale {
