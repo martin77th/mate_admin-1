@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { apiDelete, apiGet } from '@/lib/api';
+import { ApiError, apiDelete, apiGet } from '@/lib/api';
 import Modal, { ConfirmModal } from '@/components/Modal';
 import { useI18n } from '@/components/I18nProvider';
 import { useToast } from '@/components/Toast';
 import { getAuthContext, getAccessToken } from '@/lib/auth';
+import { startMeetingEnterFlow } from '@/lib/meeting-enter';
 import { getConfiguredApiBaseUrl } from '@/lib/service-config';
 import {
   addMinutes,
@@ -183,6 +184,9 @@ export default function MeetingDetailPage() {
   const [iceServersLoading, setIceServersLoading] = useState(false);
   const [iceServersPreview, setIceServersPreview] = useState('-');
   const [chatLogDownloading, setChatLogDownloading] = useState(false);
+  const [attendPasswordModalOpen, setAttendPasswordModalOpen] = useState(false);
+  const [attendPassword, setAttendPassword] = useState('');
+  const [attending, setAttending] = useState(false);
 
   const returnToListHref = useMemo(() => {
     const listParams = new URLSearchParams();
@@ -283,6 +287,47 @@ export default function MeetingDetailPage() {
     } finally {
       setDeleteConfirmOpen(false);
     }
+  };
+
+  const getErrorMessage = (err: unknown): string | undefined => {
+    if (err instanceof ApiError) return err.message;
+    if (err instanceof Error) return err.message;
+    return undefined;
+  };
+
+  const executeAttend = async (passwordInput = '') => {
+    if (!meetingId) return;
+
+    try {
+      setAttending(true);
+      await startMeetingEnterFlow({ meetingId, password: passwordInput.trim() });
+      addToast('info', t('meetings.attendRedirectingTitle'), t('meetings.attendRedirectingMessage'));
+    } catch (err) {
+      addToast('error', t('meetings.attendFailedTitle'), getErrorMessage(err));
+    } finally {
+      setAttending(false);
+    }
+  };
+
+  const onAttend = async () => {
+    if (!meeting) return;
+
+    if (meeting.password_checking) {
+      setAttendPassword('');
+      setAttendPasswordModalOpen(true);
+      return;
+    }
+
+    await executeAttend();
+  };
+
+  const submitAttendWithPassword = async () => {
+    if (meeting?.password_checking && !attendPassword.trim()) {
+      addToast('warning', t('meetings.attendPasswordRequiredTitle'), t('meetings.attendPasswordRequiredMessage'));
+      return;
+    }
+
+    await executeAttend(attendPassword);
   };
 
   const fetchIceServers = async () => {
@@ -450,6 +495,8 @@ export default function MeetingDetailPage() {
     }
     return true;
   })();
+
+  const canAttendMeeting = !isHistoryDetail && (meetingStatus === 'booked' || meetingStatus === 'held');
 
   return (
     <section className="mm-meeting-create-page">
@@ -637,6 +684,18 @@ export default function MeetingDetailPage() {
             >
               {t('meetings.actionIceServers')}
             </button>
+            {canAttendMeeting && (
+              <button
+                type="button"
+                className="mm-btn mm-btn-secondary"
+                onClick={() => {
+                  void onAttend();
+                }}
+                disabled={attending}
+              >
+                {attending ? t('meetings.attendPreparing') : t('meetings.actionAttend')}
+              </button>
+            )}
             {isHistoryDetail && (
               <button
                 type="button"
@@ -692,6 +751,61 @@ export default function MeetingDetailPage() {
             {iceServersPreview}
           </pre>
         )}
+      </Modal>
+
+      <Modal
+        open={attendPasswordModalOpen}
+        title={t('meetings.attendPasswordModalTitle')}
+        onClose={() => {
+          if (attending) return;
+          setAttendPasswordModalOpen(false);
+          setAttendPassword('');
+        }}
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              className="mm-btn mm-btn-secondary mm-btn-sm"
+              onClick={() => {
+                if (attending) return;
+                setAttendPasswordModalOpen(false);
+                setAttendPassword('');
+              }}
+              disabled={attending}
+            >
+              {t('meetings.deleteCancelButton')}
+            </button>
+            <button
+              type="button"
+              className="mm-btn mm-btn-primary mm-btn-sm"
+              onClick={() => {
+                void submitAttendWithPassword();
+              }}
+              disabled={attending}
+            >
+              {attending ? t('meetings.attendPreparing') : t('meetings.attendEnterNow')}
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: 'grid', gap: 8 }}>
+          <label className="mm-form-label" style={{ marginBottom: 0 }}>{t('meetings.attendPasswordLabel')}</label>
+          <input
+            type="password"
+            className="mm-form-control"
+            value={attendPassword}
+            placeholder={t('meetings.attendPasswordPlaceholder')}
+            onChange={e => setAttendPassword(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void submitAttendWithPassword();
+              }
+            }}
+            disabled={attending}
+          />
+        </div>
       </Modal>
     </section>
   );
