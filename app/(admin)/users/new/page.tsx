@@ -49,6 +49,14 @@ export default function UserCreatePage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [roleName, setRoleName] = useState<'' | 'anonymous' | 'member'>('');
 
+  const goBackToPreviousPage = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/users');
+  };
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -220,6 +228,15 @@ export default function UserCreatePage() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+          <button
+            type="button"
+            className="mm-btn mm-btn-secondary"
+            onClick={goBackToPreviousPage}
+            style={{ marginRight: 'auto' }}
+            disabled={submitting}
+          >
+            {t('users.paginationPrev')}
+          </button>
           <button
             type="button"
             className="mm-btn mm-btn-secondary"

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { isLoggedIn } from '@/lib/auth';
+import { clearTokens, isAdminSession, isLoggedIn } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -57,12 +57,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     () => isLoggedIn(),
     () => true
   );
+  const adminAuthorized = useSyncExternalStore(
+    () => () => {},
+    () => isAdminSession(),
+    () => true
+  );
 
   useEffect(() => {
     if (!authenticated) {
       router.replace('/login');
+      return;
     }
-  }, [authenticated, router]);
+
+    if (!adminAuthorized) {
+      clearTokens();
+      router.replace('/login?reason=admin-only');
+    }
+  }, [adminAuthorized, authenticated, router]);
 
   useEffect(() => {
     const applyAutoCollapse = () => {
@@ -78,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
   }, []);
 
-  if (!authenticated) return null;
+  if (!authenticated || !adminAuthorized) return null;
 
   return (
     <ToastProvider>

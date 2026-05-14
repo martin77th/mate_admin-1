@@ -401,6 +401,28 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
     addToast('info', t('meetings.attendNotReadyTitle'), t('meetings.attendNotReadyMessage'));
   };
 
+  const buildMeetingContextQuery = (): string => {
+    const params = new URLSearchParams();
+    params.set('page', String(safeCurrentPage));
+    params.set('pageSize', String(pageSize));
+    params.set('status', statusFilter);
+    if (query.trim()) params.set('q', query.trim());
+    if (isHistoryMode) params.set('source', 'history');
+    return params.toString();
+  };
+
+  const buildMeetingDetailHref = (meetingId: string): string => {
+    const qs = buildMeetingContextQuery();
+    const base = `/meetings/${encodeURIComponent(meetingId)}`;
+    return qs ? `${base}?${qs}` : base;
+  };
+
+  const buildMeetingEditHref = (meetingId: string): string => {
+    const qs = buildMeetingContextQuery();
+    const base = `/meetings/${encodeURIComponent(meetingId)}/edit`;
+    return qs ? `${base}?${qs}` : base;
+  };
+
   const onEditMeeting = (meeting: MeetingItem) => {
     if (!meeting.meeting_id) {
       addToast('warning', t('meetings.editNotFoundTitle'));
@@ -411,7 +433,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
       return;
     }
 
-    router.push(`/meetings/${encodeURIComponent(meeting.meeting_id)}/edit`);
+    router.push(buildMeetingEditHref(meeting.meeting_id));
   };
 
   const submitDelete = async () => {
@@ -556,7 +578,7 @@ export function MeetingsPageClient({ onlyEnterable = true }: MeetingsPageClientP
                       key={meeting.meeting_id ?? `${meeting.name ?? 'meeting'}-${idx}`}
                       style={{ cursor: meeting.meeting_id ? 'pointer' : undefined }}
                       onClick={() => {
-                        if (meeting.meeting_id) router.push(`/meetings/${encodeURIComponent(meeting.meeting_id)}`);
+                        if (meeting.meeting_id) router.push(buildMeetingDetailHref(meeting.meeting_id));
                       }}
                     >
                       <td className="mm-col-no" style={{ color: 'var(--mm-text-secondary)' }}>{rowStart + idx + 1}</td>

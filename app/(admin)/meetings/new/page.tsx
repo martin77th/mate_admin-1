@@ -226,6 +226,14 @@ export default function MeetingCreatePage() {
   const [mailInviteInput, setMailInviteInput] = useState('');
   const [pendingMemberSync, setPendingMemberSync] = useState<PendingMemberSync | null>(null);
 
+  const goBackToPreviousPage = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/meetings');
+  };
+
   const startTime = useMemo(() => combineDateAndTime(startDate, startClock), [startDate, startClock]);
   const endTime = useMemo(() => combineDateAndTime(endDate, endClock), [endDate, endClock]);
 
@@ -824,6 +832,15 @@ export default function MeetingCreatePage() {
           </div>
 
           <div className="mm-meeting-create-actions">
+            <button
+              type="button"
+              className="mm-btn mm-btn-secondary"
+              onClick={goBackToPreviousPage}
+              style={{ marginRight: 'auto' }}
+              disabled={submitting}
+            >
+              {t('meetings.paginationPrev')}
+            </button>
             <button
               type="button"
               className="mm-btn mm-btn-secondary"

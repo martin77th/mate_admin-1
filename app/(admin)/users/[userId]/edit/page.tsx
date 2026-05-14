@@ -137,6 +137,14 @@ export default function UserEditPage() {
     return qs ? `/users?${qs}` : '/users';
   }, [searchParams]);
 
+  const goBackToPreviousPage = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(returnToListHref);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -318,6 +326,15 @@ export default function UserEditPage() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+          <button
+            type="button"
+            className="mm-btn mm-btn-secondary"
+            onClick={goBackToPreviousPage}
+            style={{ marginRight: 'auto' }}
+            disabled={saving}
+          >
+            {t('users.paginationPrev')}
+          </button>
           <button
             type="button"
             className="mm-btn mm-btn-secondary"

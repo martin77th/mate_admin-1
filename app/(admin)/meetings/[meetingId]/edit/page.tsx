@@ -280,11 +280,13 @@ export default function MeetingEditPage() {
     const pageSize = searchParams.get('pageSize');
     const status = searchParams.get('status');
     const q = searchParams.get('q');
+    const source = searchParams.get('source');
 
     if (page) detailParams.set('page', page);
     if (pageSize) detailParams.set('pageSize', pageSize);
     if (status) detailParams.set('status', status);
     if (q) detailParams.set('q', q);
+    if (source === 'history') detailParams.set('source', source);
 
     const qs = detailParams.toString();
     const base = `/meetings/${encodeURIComponent(meetingId)}`;
@@ -297,15 +299,26 @@ export default function MeetingEditPage() {
     const pageSize = searchParams.get('pageSize');
     const status = searchParams.get('status');
     const q = searchParams.get('q');
+    const source = searchParams.get('source');
 
     if (page) listParams.set('page', page);
     if (pageSize) listParams.set('pageSize', pageSize);
     if (status) listParams.set('status', status);
     if (q) listParams.set('q', q);
+    if (source === 'history') listParams.set('source', source);
 
     const qs = listParams.toString();
-    return qs ? `/meetings?${qs}` : '/meetings';
+    const base = source === 'history' ? '/meetings/history' : '/meetings';
+    return qs ? `${base}?${qs}` : base;
   }, [searchParams]);
+
+  const goBackToPreviousPage = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(returnToListHref);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1020,6 +1033,9 @@ export default function MeetingEditPage() {
           </div>
 
           <div className="mm-meeting-create-actions">
+            <button type="button" className="mm-btn mm-btn-secondary" onClick={goBackToPreviousPage} style={{ marginRight: 'auto' }} disabled={saving}>
+              {t('meetings.paginationPrev')}
+            </button>
             <button type="button" className="mm-btn mm-btn-secondary" onClick={() => router.push(returnToListHref)} disabled={saving}>
               {t('meetings.createForm.cancel')}
             </button>

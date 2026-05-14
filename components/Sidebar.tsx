@@ -34,13 +34,19 @@ export default function Sidebar({ collapsed, onToggleSidebar, mobileOpen = false
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const isHistoryContext = searchParams.get('source') === 'history';
 
   const isNavItemActive = (href: string) => {
     if (href === '/meetings') {
-      // /meetings/history 등 다른 서브 경로는 제외
-      return pathname === '/meetings' || (pathname.startsWith('/meetings/') && !pathname.startsWith('/meetings/history'));
+      if (pathname === '/meetings/history' || pathname.startsWith('/meetings/history/')) return false;
+      if (pathname === '/meetings' || pathname.startsWith('/meetings/') || pathname.startsWith('/meetings/new')) {
+        return !isHistoryContext;
+      }
+      return false;
     }
-    if (href === '/meetings/history') return pathname.startsWith('/meetings/history');
+    if (href === '/meetings/history') {
+      return pathname === '/meetings/history' || pathname.startsWith('/meetings/history/') || isHistoryContext;
+    }
     return pathname.startsWith(href);
   };
 

@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { apiDelete, apiGet } from '@/lib/api';
-import { ConfirmModal } from '@/components/Modal';
+import Modal, { ConfirmModal } from '@/components/Modal';
 import { useI18n } from '@/components/I18nProvider';
 import { useToast } from '@/components/Toast';
+import { getAuthContext, getAccessToken } from '@/lib/auth';
+import { getConfiguredApiBaseUrl } from '@/lib/service-config';
 import {
   addMinutes,
   fetchMeetingById,
@@ -125,6 +127,44 @@ function normalizeMeetingMemberList(payload: unknown): MeetingMemberItem[] {
     .filter((item): item is MeetingMemberItem => !!item);
 }
 
+function formatJsonPreview(payload: unknown): string {
+  if (payload === null || payload === undefined) return '-';
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
+}
+
+function decodeDispositionFilename(raw: string): string {
+  const cleaned = raw.trim().replace(/^UTF-8''/i, '').replace(/^"|"$/g, '');
+  try {
+    return decodeURIComponent(cleaned);
+  } catch {
+    return cleaned;
+  }
+}
+
+function parseFilenameFromContentDisposition(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+
+  const filenameStarMatch = contentDisposition.match(/filename\*=([^;]+)/i);
+  if (filenameStarMatch?.[1]) {
+    return decodeDispositionFilename(filenameStarMatch[1]);
+  }
+
+  const filenameMatch = contentDisposition.match(/filename=([^;]+)/i);
+  if (filenameMatch?.[1]) {
+    return decodeDispositionFilename(filenameMatch[1]);
+  }
+
+  return null;
+}
+
+function sanitizeFilename(filename: string): string {
+  return filename.replace(/[\\/:*?"<>|]/g, '_');
+}
+
 export default function MeetingDetailPage() {
   const router = useRouter();
   const params = useParams<{ meetingId: string }>();
@@ -139,6 +179,10 @@ export default function MeetingDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [memberLoading, setMemberLoading] = useState(false);
   const [meetingMembers, setMeetingMembers] = useState<MeetingMemberItem[]>([]);
+  const [iceServersModalOpen, setIceServersModalOpen] = useState(false);
+  const [iceServersLoading, setIceServersLoading] = useState(false);
+  const [iceServersPreview, setIceServersPreview] = useState('-');
+  const [chatLogDownloading, setChatLogDownloading] = useState(false);
 
   const returnToListHref = useMemo(() => {
     const listParams = new URLSearchParams();
@@ -146,15 +190,45 @@ export default function MeetingDetailPage() {
     const pageSize = searchParams.get('pageSize');
     const status = searchParams.get('status');
     const q = searchParams.get('q');
+    const source = searchParams.get('source');
 
     if (page) listParams.set('page', page);
     if (pageSize) listParams.set('pageSize', pageSize);
     if (status) listParams.set('status', status);
     if (q) listParams.set('q', q);
+    if (source === 'history') listParams.set('source', source);
 
     const qs = listParams.toString();
-    return qs ? `/meetings?${qs}` : '/meetings';
+    const base = source === 'history' ? '/meetings/history' : '/meetings';
+    return qs ? `${base}?${qs}` : base;
   }, [searchParams]);
+
+  const returnToEditHref = useMemo(() => {
+    const detailParams = new URLSearchParams();
+    const page = searchParams.get('page');
+    const pageSize = searchParams.get('pageSize');
+    const status = searchParams.get('status');
+    const q = searchParams.get('q');
+    const source = searchParams.get('source');
+
+    if (page) detailParams.set('page', page);
+    if (pageSize) detailParams.set('pageSize', pageSize);
+    if (status) detailParams.set('status', status);
+    if (q) detailParams.set('q', q);
+    if (source === 'history') detailParams.set('source', source);
+
+    const qs = detailParams.toString();
+    const base = `/meetings/${encodeURIComponent(meetingId)}/edit`;
+    return qs ? `${base}?${qs}` : base;
+  }, [meetingId, searchParams]);
+
+  const goBackToPreviousPage = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(returnToListHref);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +282,80 @@ export default function MeetingDetailPage() {
       setDeleting(false);
     } finally {
       setDeleteConfirmOpen(false);
+    }
+  };
+
+  const fetchIceServers = async () => {
+    if (!meetingId) return;
+
+    setIceServersModalOpen(true);
+    setIceServersLoading(true);
+    setIceServersPreview('-');
+
+    try {
+      const response = await apiGet<unknown>(`/api/meeting/v1/meetings/${encodeURIComponent(meetingId)}/ice-servers`);
+      setIceServersPreview(formatJsonPreview(response));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : undefined;
+      addToast('error', t('meetings.iceServersLoadFailedTitle'), message);
+      setIceServersPreview(t('meetings.iceServersEmpty'));
+    } finally {
+      setIceServersLoading(false);
+    }
+  };
+
+  const downloadChatLogCsv = async () => {
+    if (!meetingId) return;
+
+    setChatLogDownloading(true);
+
+    try {
+      const token = getAccessToken();
+      const { tenantId } = getAuthContext();
+      const headers: Record<string, string> = {
+        Accept: 'text/csv,*/*',
+        'Accept-Charset': 'utf-8, euc-kr;q=0.9',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        if (tenantId) headers['X-Mate-Tenant-ID'] = tenantId;
+      }
+
+      const baseUrl = getConfiguredApiBaseUrl().replace(/\/+$/, '');
+      const downloadUrl = `${baseUrl}/api/meeting/v1/meetings/${encodeURIComponent(meetingId)}/chat-logs-as-csv`;
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      // 서버가 제공한 CSV 바이트를 그대로 저장해 UTF-8/EUC-KR 등 인코딩을 유지한다.
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition');
+      const filenameFromHeader = parseFilenameFromContentDisposition(disposition);
+      const filename = sanitizeFilename(filenameFromHeader || `meeting-${meetingId}-chat-logs.csv`);
+
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+
+      addToast('success', t('meetings.chatLogDownloadSuccessTitle'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : undefined;
+      addToast('error', t('meetings.chatLogDownloadFailedTitle'), message);
+    } finally {
+      setChatLogDownloading(false);
     }
   };
 
@@ -289,9 +437,11 @@ export default function MeetingDetailPage() {
   const durationMinutes = Math.max(1, Math.floor((meeting.progress_duration ?? 0) / 60000));
   const isPrivateRoom = meeting.entry_option === 'registered' || !!meeting.password_checking;
   const isCustomLimit = (meeting.member_max ?? 0) > 0;
+  const meetingStatus = normalizeMeetingStatus(meeting.status);
+  const isHistoryDetail = searchParams.get('source') === 'history' || meetingStatus === 'closed' || meetingStatus === 'deleted';
 
   const canEditMeeting = (() => {
-    if (!DETAIL_EDITABLE_MEETING_STATUSES.has(normalizeMeetingStatus(meeting.status))) return false;
+    if (!DETAIL_EDITABLE_MEETING_STATUSES.has(meetingStatus)) return false;
     if (meeting.start_time) {
       const startTs = Date.parse(meeting.start_time);
       const preEntering = meeting.pre_entering_duration ?? 300000;
@@ -470,8 +620,35 @@ export default function MeetingDetailPage() {
           </div>
 
           <div className="mm-meeting-create-actions">
+            <button
+              type="button"
+              className="mm-btn mm-btn-secondary"
+              onClick={goBackToPreviousPage}
+              style={{ marginRight: 'auto' }}
+              disabled={deleting}
+            >
+              {t('meetings.paginationPrev')}
+            </button>
+            <button
+              type="button"
+              className="mm-btn mm-btn-secondary"
+              onClick={fetchIceServers}
+              disabled={iceServersLoading}
+            >
+              {t('meetings.actionIceServers')}
+            </button>
+            {isHistoryDetail && (
+              <button
+                type="button"
+                className="mm-btn mm-btn-secondary"
+                onClick={downloadChatLogCsv}
+                disabled={chatLogDownloading}
+              >
+                {chatLogDownloading ? t('meetings.chatLogDownloading') : t('meetings.actionDownloadChatCsv')}
+              </button>
+            )}
             {canEditMeeting && (
-              <Link href={`/meetings/${encodeURIComponent(meetingId)}/edit`} className="mm-btn mm-btn-primary">
+              <Link href={returnToEditHref} className="mm-btn mm-btn-primary">
                 {t('meetings.actionEdit')}
               </Link>
             )}
@@ -499,6 +676,23 @@ export default function MeetingDetailPage() {
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={submitDelete}
       />
+
+      <Modal
+        open={iceServersModalOpen}
+        title={t('meetings.iceServersModalTitle')}
+        onClose={() => setIceServersModalOpen(false)}
+        size="lg"
+      >
+        {iceServersLoading ? (
+          <div style={{ padding: '14px 0', textAlign: 'center', color: 'var(--mm-text-secondary)' }}>
+            {t('meetings.iceServersLoading')}
+          </div>
+        ) : (
+          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, lineHeight: 1.6 }}>
+            {iceServersPreview}
+          </pre>
+        )}
+      </Modal>
     </section>
   );
 }

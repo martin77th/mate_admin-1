@@ -30,6 +30,18 @@ export interface LoginResponse {
   user?: AuthUser;
 }
 
+interface VerifyAuthTokenResponse {
+  error?: string;
+  message?: { format?: string; params?: string[] };
+  result?: {
+    user?: AuthUser;
+  };
+  user?: AuthUser;
+}
+
+export const AUTH_ERROR_ADMIN_ONLY = 'AUTH_ADMIN_ONLY';
+const ADMIN_ROLE_NAMES = new Set(['admin', 'administrator', 'super_admin', 'system_admin', 'master']);
+
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -121,6 +133,86 @@ export function getStoredUser(): AuthUser | null {
   try { return JSON.parse(raw) as AuthUser; } catch { return null; }
 }
 
+function getTrimmedString(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+export function getUserDisplayName(fallback = 'User'): string {
+  const user = getStoredUser();
+
+  const userCandidates = [
+    user?.user_name,
+    user?.auth_name,
+    user?.user_id,
+    user?.uuid,
+  ];
+
+  for (const candidate of userCandidates) {
+    const trimmed = getTrimmedString(candidate);
+    if (trimmed) return trimmed;
+  }
+
+  const payload = getTokenPayload();
+  const payloadUser = (payload?.user as Record<string, unknown> | undefined) ?? undefined;
+  const payloadCandidates = [
+    payloadUser?.user_name,
+    payloadUser?.auth_name,
+    payloadUser?.user_id,
+    payloadUser?.name,
+    payload?.preferred_username,
+    payload?.name,
+    payload?.sub,
+  ];
+
+  for (const candidate of payloadCandidates) {
+    const trimmed = getTrimmedString(candidate);
+    if (trimmed) return trimmed;
+  }
+
+  return fallback;
+}
+
+function getRoleNameFromUser(user?: AuthUser | null): string {
+  if (!user?.role) return '';
+  if (typeof user.role === 'string') return user.role.trim().toLowerCase();
+  if (typeof user.role === 'object' && user.role !== null) {
+    return (user.role.name ?? '').trim().toLowerCase();
+  }
+  return '';
+}
+
+function hasAdminPermission(user?: AuthUser | null): boolean {
+  if (!user?.role || typeof user.role !== 'object' || user.role === null) return false;
+  const permissions = Array.isArray(user.role.permissions) ? user.role.permissions : [];
+  return permissions.some(permission => {
+    const normalized = permission.trim().toLowerCase();
+    return normalized === '*' || normalized === 'admin' || normalized.startsWith('admin:');
+  });
+}
+
+export function isAdminUser(user?: AuthUser | null): boolean {
+  const roleName = getRoleNameFromUser(user);
+  if (roleName && ADMIN_ROLE_NAMES.has(roleName)) return true;
+  return hasAdminPermission(user);
+}
+
+export function isAdminSession(): boolean {
+  if (!isLoggedIn()) return false;
+
+  const user = getStoredUser();
+  if (isAdminUser(user)) return true;
+
+  const authContext = getAuthContext();
+  const roleName = (authContext.roleName ?? '').trim().toLowerCase();
+  if (roleName && ADMIN_ROLE_NAMES.has(roleName)) return true;
+
+  return authContext.permissions.some(permission => {
+    const normalized = permission.trim().toLowerCase();
+    return normalized === '*' || normalized === 'admin' || normalized.startsWith('admin:');
+  });
+}
+
 export function isLoggedIn(): boolean {
   return !!getAccessToken();
 }
@@ -129,6 +221,22 @@ export function saveTokens(accessToken: string, refreshToken: string, user?: Aut
   localStorage.setItem(TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_KEY, refreshToken);
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+async function refreshUserProfileAfterLogin(): Promise<AuthUser | null> {
+  try {
+    const res = await apiPost<VerifyAuthTokenResponse>(
+      '/svc/user/verify-auth-token/by-self',
+      {}
+    );
+    const verifiedUser = res?.result?.user ?? res?.user;
+    if (!verifiedUser) return null;
+    localStorage.setItem(USER_KEY, JSON.stringify(verifiedUser));
+    return verifiedUser;
+  } catch {
+    // 로그인 자체는 성공했으므로 프로필 재조회 실패는 무시한다.
+    return null;
+  }
 }
 
 export function clearTokens() {
@@ -153,6 +261,13 @@ export async function login(authName: string, authPassword: string): Promise<Log
   }
 
   saveTokens(accessToken, refreshToken, user);
+  await refreshUserProfileAfterLogin();
+
+  if (!isAdminSession()) {
+    clearTokens();
+    throw new Error(AUTH_ERROR_ADMIN_ONLY);
+  }
+
   return res;
 }
 

@@ -90,8 +90,8 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: n
 
 /** 이니셜 추출 (아바타용) */
 export function getInitials(name?: string | null): string {
-  if (!name) return '?';
+  if (!name) return '';
   const trimmed = name.trim();
-  if (!trimmed) return '?';
+  if (!trimmed) return '';
   return trimmed.charAt(0).toUpperCase();
 }

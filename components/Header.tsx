@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { logout, getStoredUser } from '@/lib/auth';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import { logout, getStoredUser, getUserDisplayName } from '@/lib/auth';
 import { getInitials } from '@/lib/utils';
-import type { Locale } from '@/lib/i18n';
+import { SYSTEM_LOCALE_VALUE, type Locale, type LocalePreference } from '@/lib/i18n';
 import { useI18n } from '@/components/I18nProvider';
-import type { Theme } from '@/lib/theme';
+import { SYSTEM_THEME_VALUE, type Theme, type ThemePreference } from '@/lib/theme';
 import { useTheme } from '@/components/ThemeProvider';
 
 interface HeaderProps {
@@ -26,17 +26,25 @@ function formatRole(role: unknown): string {
 export default function Header({ title, onToggleMobileMenu }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const user = getStoredUser();
-  const roleText = formatRole(user?.role);
-  const { locale, setLocale, t } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { localePreference, setLocalePreference, t } = useI18n();
+  const { themePreference, setThemePreference } = useTheme();
+  const isHydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  );
+  const user = isHydrated ? getStoredUser() : null;
+  const displayName = isHydrated ? getUserDisplayName('User') : 'User';
+  const roleText = isHydrated ? formatRole(user?.role) : '';
+  const displayNameWithRole = roleText ? `${displayName} (${roleText})` : displayName;
+  const avatarText = getInitials(displayName);
 
-  function changeLocale(nextLocale: Locale) {
-    setLocale(nextLocale);
+  function changeLocale(nextLocalePreference: LocalePreference) {
+    setLocalePreference(nextLocalePreference);
   }
 
-  function changeTheme(nextTheme: Theme) {
-    setTheme(nextTheme);
+  function changeTheme(nextThemePreference: ThemePreference) {
+    setThemePreference(nextThemePreference);
   }
 
   useEffect(() => {
@@ -65,61 +73,58 @@ export default function Header({ title, onToggleMobileMenu }: HeaderProps) {
       </div>
       <div className="mm-header-right">
         <div className="mm-dropdown" ref={dropdownRef}>
-          <div
-            className="mm-user-avatar"
+          <button
+            type="button"
+            className="mm-user-profile-trigger"
             onClick={() => setDropdownOpen(v => !v)}
-            title={user?.user_name ?? user?.auth_name ?? ''}
+            title={displayNameWithRole}
+            aria-label={displayNameWithRole}
           >
-            {getInitials(user?.user_name ?? user?.auth_name)}
-          </div>
+            <span className="mm-user-avatar" aria-hidden="true">
+              {avatarText ? avatarText : <i className="bi bi-person-fill" />}
+            </span>
+            <span className="mm-user-profile-chevron" aria-hidden="true">
+              <i className={`bi ${dropdownOpen ? 'bi-chevron-up' : 'bi-chevron-down'}`} />
+            </span>
+          </button>
           {dropdownOpen && (
             <div className="mm-dropdown-menu">
-              <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid var(--mm-border)', marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mm-text-primary)' }}>
-                  {user?.user_name ?? user?.auth_name ?? t('common.admin')}
-                </div>
-                {roleText && (
-                  <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginTop: 2 }}>{roleText}</div>
-                )}
-              </div>
-              <div style={{ padding: '4px 12px 6px', borderBottom: '1px solid var(--mm-border)', marginBottom: 4 }}>
-                <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{t('common.language')}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    className="mm-btn mm-btn-ghost"
-                    style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'ko' ? '1px solid var(--mm-primary)' : undefined }}
-                    onClick={() => changeLocale('ko')}
-                  >
-                    KO
-                  </button>
-                  <button
-                    className="mm-btn mm-btn-ghost"
-                    style={{ minWidth: 44, height: 28, padding: '0 8px', border: locale === 'en' ? '1px solid var(--mm-primary)' : undefined }}
-                    onClick={() => changeLocale('en')}
-                  >
-                    EN
-                  </button>
+              <div className="mm-user-menu-profile">
+                <span className="mm-user-menu-avatar" aria-hidden="true">
+                  {avatarText ? avatarText : <i className="bi bi-person-fill" />}
+                </span>
+                <div className="mm-user-menu-identity">
+                  <div className="mm-user-menu-name">{displayNameWithRole}</div>
                 </div>
               </div>
-              <div style={{ padding: '4px 12px 6px', borderBottom: '1px solid var(--mm-border)', marginBottom: 4 }}>
-                <div style={{ fontSize: 11, color: 'var(--mm-text-muted)', marginBottom: 6 }}>{t('common.theme')}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    className="mm-btn mm-btn-ghost"
-                    style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
-                    onClick={() => changeTheme('light')}
+
+              <div className="mm-user-menu-controls">
+                <div className="mm-user-menu-control-row">
+                  <span className="mm-user-menu-control-label">{t('common.language')}</span>
+                  <select
+                    className="mm-form-control mm-user-menu-select"
+                    value={localePreference}
+                    onChange={e => changeLocale(e.target.value as Locale | typeof SYSTEM_LOCALE_VALUE)}
                   >
-                    {t('common.light')}
-                  </button>
-                  <button
-                    className="mm-btn mm-btn-ghost"
-                    style={{ minWidth: 58, height: 28, padding: '0 8px', border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
-                    onClick={() => changeTheme('dark')}
+                    <option value={SYSTEM_LOCALE_VALUE}>{t('common.auto')}</option>
+                    <option value="ko">한국어</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+                <div className="mm-user-menu-control-row">
+                  <span className="mm-user-menu-control-label">{t('common.theme')}</span>
+                  <select
+                    className="mm-form-control mm-user-menu-select"
+                    value={themePreference}
+                    onChange={e => changeTheme(e.target.value as Theme | typeof SYSTEM_THEME_VALUE)}
                   >
-                    {t('common.dark')}
-                  </button>
+                    <option value={SYSTEM_THEME_VALUE}>{t('common.auto')}</option>
+                    <option value="light">{t('common.light')}</option>
+                    <option value="dark">{t('common.dark')}</option>
+                  </select>
                 </div>
               </div>
+
               <button className="mm-dropdown-item danger" onClick={logout}>
                 <i className="bi bi-box-arrow-right" />
                 {t('common.logout')}

@@ -1,6 +1,7 @@
 export const SUPPORTED_LOCALES = ['ko', 'en'] as const;
 
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
+export type LocalePreference = Locale | 'system';
 
 export interface I18nDictionary {
   [key: string]: string | I18nDictionary;
@@ -8,6 +9,7 @@ export interface I18nDictionary {
 
 export const DEFAULT_LOCALE: Locale = 'ko';
 export const LOCALE_STORAGE_KEY = 'mm_locale';
+export const SYSTEM_LOCALE_VALUE: LocalePreference = 'system';
 
 export const MESSAGES: Record<Locale, I18nDictionary> = {
   ko: {
@@ -19,6 +21,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       logout: '로그아웃',
       language: '언어',
       theme: '테마',
+      auto: '자동',
       light: 'Light',
       dark: 'Dark',
       loading: '로딩 중...',
@@ -51,9 +54,13 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       serviceUrlPlaceholder: 'https://example.com',
       serviceUrlHelp: '저장 후 로그인부터 해당 URL을 기준으로 API를 호출합니다.',
       saveServiceUrl: 'URL 저장',
+      testServiceUrl: '연결 테스트',
+      testingServiceUrl: '테스트 중...',
       resetDefaultUrl: '기본값 복원',
       backToLogin: '로그인으로 돌아가기',
       serviceUrlSaved: '서비스 URL이 저장되었습니다.',
+      serviceUrlTestSuccessPrefix: '연결에 성공했습니다. 응답 상태',
+      serviceUrlTestFailed: '연결에 실패했습니다. 주소 또는 CORS/네트워크 정책을 확인해주세요.',
       invalidServiceUrl: 'http:// 또는 https:// 로 시작하는 URL을 입력해주세요.',
       authNameLabel: '아이디',
       authNamePlaceholder: '관리자 아이디',
@@ -64,6 +71,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       requiredAuthName: '아이디를 입력해주세요.',
       requiredAuthPassword: '비밀번호를 입력해주세요.',
       invalidCredentials: '아이디 또는 비밀번호가 올바르지 않습니다.',
+      adminOnly: '관리자 계정만 로그인할 수 있습니다.',
     },
     dashboard: {
       title: '대시보드',
@@ -197,8 +205,17 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       actionAttend: '참석',
       actionEdit: '수정',
       actionDelete: '삭제',
+      actionIceServers: 'ICE 서버 조회',
+      actionDownloadChatCsv: '채팅 CSV 다운로드',
+      chatLogDownloading: '다운로드 중...',
       detailLoadFailedTitle: '미팅 정보를 불러오지 못했습니다.',
       detailNotFoundTitle: '미팅을 찾을 수 없습니다.',
+      iceServersModalTitle: 'ICE 서버 목록',
+      iceServersLoading: 'ICE 서버 정보를 불러오는 중입니다.',
+      iceServersEmpty: '조회된 ICE 서버 정보가 없습니다.',
+      iceServersLoadFailedTitle: 'ICE 서버 정보 조회에 실패했습니다.',
+      chatLogDownloadSuccessTitle: '채팅 CSV 다운로드를 시작했습니다.',
+      chatLogDownloadFailedTitle: '채팅 CSV 다운로드에 실패했습니다.',
       attendNotReadyTitle: '미팅 참석 준비 중',
       attendNotReadyMessage: '미팅 참석 기능은 곧 제공될 예정입니다.',
       editNotReadyTitle: '미팅 수정 준비 중',
@@ -306,6 +323,10 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       statusUiOnly: 'UI 우선',
       saveDraft: '시안 저장',
       resetSection: '초기값 복원',
+      policySkeletonPreparedTitle: '정책 요청 골격 준비 완료',
+      policySkeletonNotApplied: '실제 서버 반영은 현재 비활성화되어 있습니다.',
+      policySkeletonDraftHint: '저장 시 정책 요청(payload)만 준비하고, 실제 적용은 수행하지 않습니다.',
+      policySkeletonPreparedHint: '마지막으로 준비된 정책 요청 엔드포인트',
       menu: {
         service: '서비스 기본 설정',
         meetingPolicy: '미팅 기본 정책',
@@ -345,6 +366,12 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
         methodLabel: '메서드',
         authNameLabel: 'auth_name',
         authPasswordLabel: 'auth_password',
+        hintLabel: '힌트',
+        actionLabel: '기능',
+        actionRead: '조회',
+        actionRegister: '등록',
+        actionUpdate: '수정',
+        actionDelete: '삭제',
         uriLabel: 'URI 정보 입력',
         uriPlaceholder: '/api/user/v1/users?limit=1 또는 https://...',
         checkButton: '검사',
@@ -441,6 +468,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       logout: 'Logout',
       language: 'Language',
       theme: 'Theme',
+      auto: 'Auto',
       light: 'Light',
       dark: 'Dark',
       loading: 'Loading...',
@@ -473,9 +501,13 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       serviceUrlPlaceholder: 'https://example.com',
       serviceUrlHelp: 'After saving, login and API calls use this base URL.',
       saveServiceUrl: 'Save URL',
+      testServiceUrl: 'Test Connection',
+      testingServiceUrl: 'Testing...',
       resetDefaultUrl: 'Reset to Default',
       backToLogin: 'Back to Login',
       serviceUrlSaved: 'Service URL has been saved.',
+      serviceUrlTestSuccessPrefix: 'Connection succeeded. Response status',
+      serviceUrlTestFailed: 'Connection failed. Check URL, CORS, or network policy.',
       invalidServiceUrl: 'Enter a valid URL starting with http:// or https://.',
       authNameLabel: 'Username',
       authNamePlaceholder: 'Admin username',
@@ -486,6 +518,7 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       requiredAuthName: 'Please enter your username.',
       requiredAuthPassword: 'Please enter your password.',
       invalidCredentials: 'The username or password is incorrect.',
+      adminOnly: 'Only administrator accounts are allowed to sign in.',
     },
     dashboard: {
       title: 'Dashboard',
@@ -619,8 +652,17 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       actionAttend: 'Attend',
       actionEdit: 'Edit',
       actionDelete: 'Delete',
+      actionIceServers: 'View ICE Servers',
+      actionDownloadChatCsv: 'Download Chat CSV',
+      chatLogDownloading: 'Downloading...',
       detailLoadFailedTitle: 'Failed to load meeting information.',
       detailNotFoundTitle: 'Meeting not found.',
+      iceServersModalTitle: 'ICE Server List',
+      iceServersLoading: 'Loading ICE server information.',
+      iceServersEmpty: 'No ICE server information found.',
+      iceServersLoadFailedTitle: 'Failed to load ICE server information.',
+      chatLogDownloadSuccessTitle: 'Chat CSV download has started.',
+      chatLogDownloadFailedTitle: 'Failed to download chat CSV.',
       attendNotReadyTitle: 'Meeting Attend Coming Soon',
       attendNotReadyMessage: 'The meeting attend feature will be available soon.',
       editNotReadyTitle: 'Meeting Edit Coming Soon',
@@ -728,6 +770,10 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
       statusUiOnly: 'UI First',
       saveDraft: 'Save Draft',
       resetSection: 'Restore Defaults',
+      policySkeletonPreparedTitle: 'Policy request skeleton is ready',
+      policySkeletonNotApplied: 'Actual server apply is currently disabled.',
+      policySkeletonDraftHint: 'Save prepares policy request payload only and does not apply it yet.',
+      policySkeletonPreparedHint: 'Last prepared policy endpoint',
       menu: {
         service: 'Service Defaults',
         meetingPolicy: 'Meeting Policy',
@@ -767,6 +813,12 @@ export const MESSAGES: Record<Locale, I18nDictionary> = {
         methodLabel: 'Method',
         authNameLabel: 'auth_name',
         authPasswordLabel: 'auth_password',
+        hintLabel: 'Hint',
+        actionLabel: 'Action',
+        actionRead: 'Read',
+        actionRegister: 'Create',
+        actionUpdate: 'Update',
+        actionDelete: 'Delete',
         uriLabel: 'URI Input',
         uriPlaceholder: '/api/user/v1/users?limit=1 or https://...',
         checkButton: 'Check',
@@ -871,6 +923,26 @@ function getValueFromPath(obj: I18nDictionary, path: string): string | undefined
 export function normalizeLocale(value?: string | null): Locale {
   if (!value) return DEFAULT_LOCALE;
   return SUPPORTED_LOCALES.includes(value as Locale) ? (value as Locale) : DEFAULT_LOCALE;
+}
+
+export function normalizeLocalePreference(value?: string | null): LocalePreference {
+  if (!value) return SYSTEM_LOCALE_VALUE;
+  if (value === SYSTEM_LOCALE_VALUE) return SYSTEM_LOCALE_VALUE;
+  return SUPPORTED_LOCALES.includes(value as Locale) ? (value as Locale) : SYSTEM_LOCALE_VALUE;
+}
+
+export function resolveLocaleFromPreference(preference: LocalePreference, languages?: readonly string[]): Locale {
+  return preference === SYSTEM_LOCALE_VALUE ? getSystemLocale(languages) : preference;
+}
+
+export function getSystemLocale(languages?: readonly string[]): Locale {
+  const candidates = languages ?? [];
+  for (const language of candidates) {
+    const normalized = language.toLowerCase();
+    if (normalized.startsWith('ko')) return 'ko';
+    if (normalized.startsWith('en')) return 'en';
+  }
+  return DEFAULT_LOCALE;
 }
 
 export function localeToBcp47(locale: Locale): string {

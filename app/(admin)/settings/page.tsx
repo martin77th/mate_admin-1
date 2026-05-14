@@ -15,6 +15,13 @@ type SettingsMenuKey =
 type ApiCheckAuthMode = 'withToken' | 'none';
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 type ApiCatalogScope = 'quick' | 'common' | 'dashboard' | 'users' | 'meetings';
+type EditablePolicySection = 'meetingPolicy' | 'userPolicy';
+
+interface PreparedPolicyRequest {
+  section: EditablePolicySection;
+  endpoint: string;
+  payload: Record<string, unknown>;
+}
 
 interface ApiQuickCheckItem {
   id: string;
@@ -25,6 +32,12 @@ interface ApiQuickCheckItem {
   pathParams: Record<string, string>;
   requestBody: string;
   confirmDangerousRequest: boolean;
+}
+
+interface ApiCatalogItem {
+  method: HttpMethod;
+  uri: string;
+  actionKey?: string;
 }
 
 interface ApiCheckResult {
@@ -67,6 +80,13 @@ const API_SCOPE_BUTTONS: Array<{ key: ApiCatalogScope; labelKey: string }> = [
   { key: 'meetings', labelKey: 'settings.apiCatalog.scopeMeetings' },
 ];
 
+const SETTINGS_POLICY_APPLY_ENABLED = false;
+
+const SETTINGS_POLICY_ENDPOINTS = {
+  meeting: '/api/meeting/v1/settings/update',
+  user: '/api/user/v1/settings/option',
+} as const;
+
 function normalizeSettingsSection(value: string | null): SettingsMenuKey {
   if (!value) return 'meetingPolicy';
   return SETTINGS_MENU_KEYS.includes(value as SettingsMenuKey) ? (value as SettingsMenuKey) : 'meetingPolicy';
@@ -107,6 +127,19 @@ function formatResponsePreview(rawText: string): string {
     return JSON.stringify(parsed, null, 2).slice(0, 4000);
   } catch {
     return rawText.slice(0, 4000);
+  }
+}
+
+function getDefaultActionKey(method: HttpMethod): string {
+  switch (method) {
+    case 'POST':
+      return 'settings.apiCatalog.actionRegister';
+    case 'PUT':
+      return 'settings.apiCatalog.actionUpdate';
+    case 'DELETE':
+      return 'settings.apiCatalog.actionDelete';
+    default:
+      return 'settings.apiCatalog.actionRead';
   }
 }
 
@@ -170,17 +203,57 @@ function getRequestBodySample(uri: string, method: HttpMethod): string {
   return JSON.stringify({}, null, 2);
 }
 
+function buildMeetingPolicyPayload(draft: SettingsDraft): Record<string, unknown> {
+  return {
+    policy: {
+      default_pre_entering_minutes: draft.defaultPreEntryMinutes,
+      default_progress_minutes: draft.defaultMeetingMinutes,
+      default_entry_option: draft.defaultEntryOption,
+      default_visibility: draft.defaultVisibility,
+      editable_statuses: draft.editableStatuses.split(',').map(item => item.trim()).filter(Boolean),
+      retention_days: draft.retentionDays,
+    },
+  };
+}
+
+function buildUserPolicyPayload(draft: SettingsDraft): Record<string, unknown> {
+  return {
+    policy: {
+      default_user_role: draft.defaultUserRole,
+      password_min_length: draft.passwordMinLength,
+      session_timeout_minutes: draft.sessionTimeoutMinutes,
+      allow_multi_session: draft.allowMultiSession,
+    },
+  };
+}
+
+function preparePolicyRequest(section: EditablePolicySection, draft: SettingsDraft): PreparedPolicyRequest {
+  if (section === 'meetingPolicy') {
+    return {
+      section,
+      endpoint: SETTINGS_POLICY_ENDPOINTS.meeting,
+      payload: buildMeetingPolicyPayload(draft),
+    };
+  }
+
+  return {
+    section,
+    endpoint: SETTINGS_POLICY_ENDPOINTS.user,
+    payload: buildUserPolicyPayload(draft),
+  };
+}
+
 const IMPLEMENTED_API_GROUPS: Array<{
   groupId: string;
   titleKey: string;
   scopes: ApiCatalogScope[];
-  items: Array<{ method: HttpMethod; uri: string }>;
+  items: ApiCatalogItem[];
 }> = [
   {
     groupId: 'auth',
     titleKey: 'settings.apiCatalog.groupAuth',
     scopes: ['common'],
-    items: [{ method: 'POST', uri: '/svc/user/issue-auth-token/by-password' }],
+    items: [{ method: 'POST', uri: '/svc/user/issue-auth-token/by-password', actionKey: 'settings.apiCatalog.actionRead' }],
   },
   {
     groupId: 'dashboard',
@@ -218,7 +291,7 @@ const IMPLEMENTED_API_GROUPS: Array<{
       { method: 'POST', uri: '/api/meeting/v1/meetings' },
       { method: 'PUT', uri: '/api/meeting/v1/meetings/{meeting_id}' },
       { method: 'DELETE', uri: '/api/meeting/v1/meetings/{meeting_id}' },
-      { method: 'GET', uri: '/api/meeting/v1/members' },
+      { method: 'GET', uri: '/api/meeting/v1/members', actionKey: 'settings.apiCatalog.actionUpdate' },
       { method: 'PUT', uri: '/api/meeting/v1/meetings/{meeting_id}/members' },
     ],
   },
@@ -327,6 +400,7 @@ export default function SettingsPage() {
   const [quickChecks, setQuickChecks] = useState<ApiQuickCheckItem[]>(API_QUICK_CHECK_DEFAULTS);
   const [activeApiScope, setActiveApiScope] = useState<ApiCatalogScope>('common');
   const [apiBaseUrlInput, setApiBaseUrlInput] = useState(getConfiguredApiBaseUrl());
+  const [lastPreparedPolicy, setLastPreparedPolicy] = useState<PreparedPolicyRequest | null>(null);
 
   const resizeBodyTextarea = useCallback((textarea: HTMLTextAreaElement | null) => {
     if (!textarea) return;
@@ -335,7 +409,25 @@ export default function SettingsPage() {
   }, []);
 
   const onSaveSection = () => {
-    addToast('info', t('settings.statusUiOnly'), t('settings.plannedHint'));
+    if (activeMenu !== 'meetingPolicy' && activeMenu !== 'userPolicy') {
+      addToast('info', t('settings.statusUiOnly'), t('settings.plannedHint'));
+      return;
+    }
+
+    const prepared = preparePolicyRequest(activeMenu, draft);
+    setLastPreparedPolicy(prepared);
+
+    // 향후 실제 API 적용 시 여기에서 endpoint/payload를 사용해 호출한다.
+    console.info('[SettingsPolicySkeleton] Prepared policy request', prepared);
+
+    if (!SETTINGS_POLICY_APPLY_ENABLED) {
+      addToast(
+        'info',
+        t('settings.policySkeletonPreparedTitle'),
+        `${t('settings.policySkeletonNotApplied')} (${prepared.endpoint})`
+      );
+      return;
+    }
   };
 
   const onResetSection = () => {
@@ -766,7 +858,7 @@ export default function SettingsPage() {
                         <div key={rowId} className="mm-settings-api-quick-row-block">
                           <div className="mm-settings-api-quick-row">
                             <label className="mm-settings-field">
-                              <span>{`${item.method} ${item.uri}`}</span>
+                              <span>{`(${t(item.actionKey ?? getDefaultActionKey(item.method))}) ${item.method} ${item.uri}`}</span>
                               <input
                                 className="mm-form-control"
                                 value={quick.uri}
@@ -924,6 +1016,11 @@ export default function SettingsPage() {
 
           {isEditableSection && (
             <div className="mm-settings-actions">
+              <p className="mm-form-hint" style={{ margin: 0, alignSelf: 'center' }}>
+                {lastPreparedPolicy && lastPreparedPolicy.section === activeMenu
+                  ? `${t('settings.policySkeletonPreparedHint')} (${lastPreparedPolicy.endpoint})`
+                  : t('settings.policySkeletonDraftHint')}
+              </p>
               <button type="button" className="mm-btn mm-btn-secondary" onClick={onResetSection}>
                 {t('settings.resetSection')}
               </button>

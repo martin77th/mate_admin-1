@@ -1,29 +1,32 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { login } from '@/lib/auth';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { login, AUTH_ERROR_ADMIN_ONLY } from '@/lib/auth';
 import { useI18n } from '@/components/I18nProvider';
-import type { Locale } from '@/lib/i18n';
+import { SYSTEM_LOCALE_VALUE, type Locale, type LocalePreference } from '@/lib/i18n';
 import { useTheme } from '@/components/ThemeProvider';
-import type { Theme } from '@/lib/theme';
+import { SYSTEM_THEME_VALUE, type Theme, type ThemePreference } from '@/lib/theme';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { locale, setLocale, t } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const searchParams = useSearchParams();
+  const { localePreference, setLocalePreference, t } = useI18n();
+  const { themePreference, setThemePreference } = useTheme();
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const reasonAdminOnly = searchParams.get('reason') === 'admin-only';
+  const displayError = error || (reasonAdminOnly ? t('login.adminOnly') : '');
 
-  function changeLocale(nextLocale: Locale) {
-    setLocale(nextLocale);
+  function changeLocale(nextLocalePreference: LocalePreference) {
+    setLocalePreference(nextLocalePreference);
   }
 
-  function changeTheme(nextTheme: Theme) {
-    setTheme(nextTheme);
+  function changeTheme(nextThemePreference: ThemePreference) {
+    setThemePreference(nextThemePreference);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -36,8 +39,12 @@ export default function LoginPage() {
     try {
       await login(authName.trim(), authPassword);
       router.replace('/dashboard');
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === AUTH_ERROR_ADMIN_ONLY) {
+        setError(t('login.adminOnly'));
+      } else {
       setError(t('login.invalidCredentials'));
+      }
     } finally {
       setLoading(false);
     }
@@ -46,50 +53,6 @@ export default function LoginPage() {
   return (
     <div className="mm-login-page">
       <div className="mm-login-card">
-        <div className="mm-login-toolbar">
-          <div className="mm-login-toolbar-groups">
-            <div className="mm-login-toolbar-group">
-              <span className="mm-login-toolbar-label">{t('common.theme')}</span>
-              <button
-                type="button"
-                className="mm-btn mm-btn-ghost mm-login-chip"
-                style={{ border: theme === 'light' ? '1px solid var(--mm-primary)' : undefined }}
-                onClick={() => changeTheme('light')}
-              >
-                {t('common.light')}
-              </button>
-              <button
-                type="button"
-                className="mm-btn mm-btn-ghost mm-login-chip"
-                style={{ border: theme === 'dark' ? '1px solid var(--mm-primary)' : undefined }}
-                onClick={() => changeTheme('dark')}
-              >
-                {t('common.dark')}
-              </button>
-            </div>
-
-            <div className="mm-login-toolbar-group">
-              <span className="mm-login-toolbar-label">{t('common.language')}</span>
-              <button
-                type="button"
-                className="mm-btn mm-btn-ghost mm-login-chip"
-                style={{ minWidth: 44, border: locale === 'ko' ? '1px solid var(--mm-primary)' : undefined }}
-                onClick={() => changeLocale('ko')}
-              >
-                KO
-              </button>
-              <button
-                type="button"
-                className="mm-btn mm-btn-ghost mm-login-chip"
-                style={{ minWidth: 44, border: locale === 'en' ? '1px solid var(--mm-primary)' : undefined }}
-                onClick={() => changeLocale('en')}
-              >
-                EN
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Logo */}
         <div className="mm-login-logo">
           <div className="mm-login-logo-icon">
@@ -110,7 +73,7 @@ export default function LoginPage() {
             <input
               id="authName"
               type="text"
-              className={`mm-form-control${error ? ' is-invalid' : ''}`}
+              className={`mm-form-control${displayError ? ' is-invalid' : ''}`}
               placeholder={t('login.authNamePlaceholder')}
               value={authName}
               onChange={e => setAuthName(e.target.value)}
@@ -125,7 +88,7 @@ export default function LoginPage() {
               <input
                 id="authPassword"
                 type={showPw ? 'text' : 'password'}
-                className={`mm-form-control${error ? ' is-invalid' : ''}`}
+                className={`mm-form-control${displayError ? ' is-invalid' : ''}`}
                 placeholder={t('login.authPasswordPlaceholder')}
                 value={authPassword}
                 onChange={e => setAuthPassword(e.target.value)}
@@ -142,9 +105,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {error && (
+          {displayError && (
             <div className="mm-invalid-feedback" style={{ marginBottom: 12 }}>
-              <i className="bi bi-exclamation-circle me-1" />{error}
+              <i className="bi bi-exclamation-circle me-1" />{displayError}
             </div>
           )}
 
@@ -165,6 +128,35 @@ export default function LoginPage() {
                 </>
               )}
             </button>
+          </div>
+
+          <div className="mm-login-bottom-toolbar">
+            <div className="mm-login-bottom-item">
+              <span className="mm-login-toolbar-label">{t('common.theme')}</span>
+              <select
+                className="mm-form-control mm-login-select"
+                value={themePreference}
+                onChange={e => changeTheme(e.target.value as Theme | typeof SYSTEM_THEME_VALUE)}
+              >
+                <option value={SYSTEM_THEME_VALUE}>{t('common.auto')}</option>
+                <option value="light">{t('common.light')}</option>
+                <option value="dark">{t('common.dark')}</option>
+              </select>
+            </div>
+
+            <div className="mm-login-bottom-item">
+              <span className="mm-login-toolbar-label">{t('common.language')}</span>
+              <select
+                className="mm-form-control mm-login-select"
+                value={localePreference}
+                onChange={e => changeLocale(e.target.value as Locale | typeof SYSTEM_LOCALE_VALUE)}
+              >
+                <option value={SYSTEM_LOCALE_VALUE}>{t('common.auto')}</option>
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+
             <Link
               href="/login/settings"
               className="mm-login-settings-link"
